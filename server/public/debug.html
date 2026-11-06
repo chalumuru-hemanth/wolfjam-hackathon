@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Debug Client</title>
+<style>
+  :root { --bg: #0b0e13; --text: #edf1f7; --muted: #8b96a8; --me: #6ea8fe; --human: #3ddc97; --bot: #ffc14d; --arena: #141922; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  #hud { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-size: 15px; }
+  canvas { flex: 1; min-height: 0; width: 100%; background: var(--arena); border-radius: 10px; touch-action: none; }
+  #help { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div id="hud"><span id="state">Connecting</span><span id="score"></span></div>
+  <canvas id="arena"></canvas>
+  <div id="help">Stand-in for the Phaser client. WASD or arrows to move, space to act. On a phone, drag to move and tap to act.</div>
+
+<script src="/vendor/colyseus.js"></script>
+<script>
+  "use strict";
+  const ARENA = { width: 1600, height: 900, radius: 28 };
+  const INTERPOLATION_SPEED = 0.3;
+  const client = new Colyseus.Client(location.origin);
+  const canvas = document.getElementById("arena");
+  const ctx = canvas.getContext("2d");
+  const held = new Set();
+  const touch = { moveX: 0, moveY: 0, startX: 0, startY: 0, action: false };
+  const shown = new Map();
+  const pulses = [];
+  let room = null;
+  let input = null;
+
+  function playerId() {
+    const key = "wolfjam-player-id";
+    try {
+      const existing = localStorage.getItem(key);
+      if (existing) return existing;
+      const created = crypto.randomUUID();
+      localStorage.setItem(key, created);
+      return created;
+    } catch {
+      return crypto.randomUUID();
+    }
+  }
+
+  const setState = (text) => { document.getElementById("state").textContent = text; };
+
+  const TOKEN_KEY = "wolfjam-reconnection-token";
+
+  function readToken() {
+    try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+  }
+  function saveToken(token) {
+    try {
+      if (token) sessionStorage.setItem(TOKEN_KEY, token);
+      else sessionStorage.removeItem(TOKEN_KEY);
+    } catch { /* private mode: reload simply requeues */ }
+  }
+
+  function enterRoom(joined) {
+    room = joined;
+    // The SDK default refuses to auto-reconnect in a room's first 5 seconds.
+    room.reconnection.minUptime = 0;
+    saveToken(room.reconnectionToken);
+    input = room.input();
+    room.onMessage("fx", (fx) => pulses.push({ x: fx.x, y: fx.y, age: 0 }));
+    room.onMessage("round_result", (result) => {
+      const top = result.standings[0];
+      setState(top && top.score > 0 ? `Winner: ${top.handle} (${top.score})` : "No winner");
+    });
+    room.onDrop(() => setState("Connection lost, reconnecting"));
+    room.onReconnect(() => saveToken(room.reconnectionToken));
+    room.onLeave(() => {
+      room = null;
+      input = null;
+      saveToken(null);
+      queue();
+    });
+  }
+
+  async function queue() {
+    shown.clear();
+    setState("Finding a match");
+    const wait = await client.joinOrCreate("wait", { playerId: playerId() });
+    wait.onMessage("matched", async (reservation) => {
+      try {
+        enterRoom(await client.consumeSeatReservation(reservation));
+        wait.leave();
+      } catch {
+        // The seat can expire if the phone stalled. Back of the line, not an error.
+        await wait.leave();
+        queue();
+      }
+    });
+  }
+
+  /** A page reload destroys the room object, so resume from the saved token. */
+  async function start() {
+    const token = readToken();
+    if (token) {
+      try {
+        enterRoom(await client.reconnect(token));
+        return;
+      } catch {
+        saveToken(null);
+      }
+    }
+    await queue();
+  }
+
+  addEventListener("keydown", (e) => { held.add(e.code); if (e.code === "Space") e.preventDefault(); });
+  addEventListener("keyup", (e) => held.delete(e.code));
+
+  canvas.addEventListener("pointerdown", (e) => {
+    touch.startX = e.clientX;
+    touch.startY = e.clientY;
+    touch.action = true;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!e.buttons && e.pointerType === "mouse") return;
+    touch.moveX = Math.max(-1, Math.min(1, (e.clientX - touch.startX) / 50));
+    touch.moveY = Math.max(-1, Math.min(1, (e.clientY - touch.startY) / 50));
+  });
+  const endTouch = () => { touch.moveX = 0; touch.moveY = 0; };
+  canvas.addEventListener("pointerup", endTouch);
+  canvas.addEventListener("pointercancel", endTouch);
+
+  function sendInput() {
+    if (!input) return;
+    const axis = (minus, minus2, plus, plus2) =>
+      (held.has(plus) || held.has(plus2) ? 1 : 0) - (held.has(minus) || held.has(minus2) ? 1 : 0);
+    input.data.moveX = axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight") || touch.moveX;
+    input.data.moveY = axis("KeyW", "ArrowUp", "KeyS", "ArrowDown") || touch.moveY;
+    input.data.action = held.has("Space") || touch.action;
+    touch.action = false;
+    input.send();
+  }
+  setInterval(sendInput, 33);
+
+  function render() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const scale = Math.min(canvas.width / ARENA.width, canvas.height / ARENA.height);
+    ctx.setTransform(scale, 0, 0, scale,
+      (canvas.width - ARENA.width * scale) / 2, (canvas.height - ARENA.height * scale) / 2);
+    ctx.clearRect(-9999, -9999, 99999, 99999);
+    ctx.strokeStyle = "#262e3b";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, ARENA.width, ARENA.height);
+
+    for (const pulse of pulses) {
+      pulse.age += 1;
+      ctx.strokeStyle = `rgba(110,168,254,${Math.max(0, 1 - pulse.age / 20)})`;
+      ctx.beginPath();
+      ctx.arc(pulse.x, pulse.y, 30 + pulse.age * 7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    while (pulses.length && pulses[0].age > 20) pulses.shift();
+
+    if (room && room.state.players) {
+      const phase = room.state.phase;
+      if (phase !== "results") setState(`${phase} ${room.state.secondsLeft ?? ""}`);
+      room.state.players.forEach((player, id) => {
+        const last = shown.get(id) || { x: player.x, y: player.y };
+        last.x += (player.x - last.x) * INTERPOLATION_SPEED;
+        last.y += (player.y - last.y) * INTERPOLATION_SPEED;
+        shown.set(id, last);
+
+        const mine = id === room.sessionId;
+        if (mine) document.getElementById("score").textContent = `${player.handle}: ${player.score}`;
+        ctx.globalAlpha = player.connected ? 1 : 0.4;
+        ctx.fillStyle = mine ? "#6ea8fe" : player.kind === "bot" ? "#ffc14d" : "#3ddc97";
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, ARENA.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#edf1f7";
+        ctx.font = "26px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText(`${player.handle} ${player.score}`, last.x, last.y - 42);
+      });
+    }
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+  start().catch((error) => setState(`Could not connect: ${error.message}`));
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build the production image
+        run: docker build -t wolfjam .
+      - name: Start the production image
+        run: |
+          docker run -d --name wolfjam -p 2567:2567 -e PORT=2567 -e OPS_TOKEN=ci wolfjam
+          timeout 30 sh -c 'until curl -sf localhost:2567/healthz; do sleep 1; done'
+      - run: npm run smoke
+      - run: npm run abuse
+      - name: Server log
+        if: always()
+        run: docker logs wolfjam || true

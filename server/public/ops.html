@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Ops</title>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --panel: #141922;
+    --line: #262e3b;
+    --text: #edf1f7;
+    --muted: #8b96a8;
+    --good: #3ddc97;
+    --warn: #ffc14d;
+    --bad: #ff5f6d;
+    --accent: #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+  #status { color: var(--muted); font-size: 15px; }
+  #status.live::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--good);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    min-width: 0;
+  }
+  .label {
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .value {
+    margin: 6px 0 4px;
+    font-size: clamp(52px, 8vw, 84px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .value small { font-size: 0.36em; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .sub { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .good { color: var(--good); }
+  .warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+  svg.spark { display: block; width: 100%; height: 44px; margin-top: 12px; }
+  svg.spark polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+  }
+  button {
+    padding: 14px 22px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #08101f;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button.stop { background: var(--bad); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type="number"] {
+    width: 96px;
+    padding: 13px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 17px;
+  }
+  #swarmNote { color: var(--muted); font-size: 15px; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1 id="title">Live Ops</h1>
+    <div id="status">Connecting</div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <div class="label">Active rooms</div>
+      <div class="value" id="rooms">0</div>
+      <div class="sub" id="phases">No rounds running</div>
+    </section>
+
+    <section class="card">
+      <div class="label">Players</div>
+      <div class="value" id="players">0</div>
+      <div class="sub" id="playerSplit">0 humans, 0 bots, 0 swarm</div>
+      <svg class="spark" id="playersSpark" viewBox="0 0 120 44" preserveAspectRatio="none" aria-hidden="true"><polyline></polyline></svg>
+    </section>
+
+    <section class="card">
+      <div class="label">Tick time p95</div>
+      <div class="value" id="tickP95">0<small> ms</small></div>
+      <div class="sub" id="tickNote">p50 0 ms of 33.3 ms budget</div>
+      <svg class="spark" id="tickSpark" viewBox="0 0 120 44" preserveAspectRatio="none" aria-hidden="true"><polyline></polyline></svg>
+    </section>
+
+    <section class="card">
+      <div class="label">Event loop delay p95</div>
+      <div class="value" id="loopP95">0<small> ms</small></div>
+      <div class="sub">Includes state encoding and network work</div>
+    </section>
+
+    <section class="card">
+      <div class="label">Queue</div>
+      <div class="value" id="queue">0</div>
+      <div class="sub" id="queueNote">Wait p50 0 s, p95 0 s</div>
+    </section>
+
+    <section class="card">
+      <div class="label">Reliability</div>
+      <div class="value" id="overruns">0</div>
+      <div class="sub" id="reliabilityNote">Ticks over budget</div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <div class="label">Load test</div>
+    <div class="controls">
+      <input id="count" type="number" min="1" max="150" value="25" aria-label="Swarm client count">
+      <button id="start">Spawn Swarm</button>
+      <button id="stop" class="stop" disabled>Kill Swarm</button>
+      <span id="swarmNote">Idle</span>
+    </div>
+  </section>
+
+<script>
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const TOKEN_KEY = "ops-token";
+  const HISTORY = 90;
+  const history = { players: [], tick: [] };
+
+  const fixed = (value) => (value < 10 ? value.toFixed(2) : value.toFixed(1));
+
+  function readToken() {
+    try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
+  }
+  function saveToken(token) {
+    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+  }
+
+  function grade(el, value, warnAt, badAt) {
+    el.classList.toggle("good", value < warnAt);
+    el.classList.toggle("warn", value >= warnAt && value < badAt);
+    el.classList.toggle("bad", value >= badAt);
+  }
+
+  function setMs(el, value) {
+    el.firstChild.textContent = fixed(value);
+  }
+
+  function spark(svgId, values) {
+    const max = Math.max(...values, 1);
+    const points = values
+      .map((value, i) => `${(i / (HISTORY - 1)) * 120},${42 - (value / max) * 40}`)
+      .join(" ");
+    $(svgId).querySelector("polyline").setAttribute("points", points);
+  }
+
+  function pushHistory(list, value) {
+    list.push(value);
+    if (list.length > HISTORY) list.shift();
+  }
+
+  function render(m) {
+    $("title").textContent = `${m.game.name}: Live Ops`;
+    document.title = `${m.players.total} players | Live Ops`;
+
+    $("rooms").textContent = m.rooms;
+    const phases = Object.entries(m.roomsByPhase).map(([phase, n]) => `${n} ${phase}`);
+    $("phases").textContent = phases.length ? phases.join(", ") : "No rounds running";
+
+    $("players").textContent = m.players.total;
+    $("playerSplit").textContent =
+      `${m.players.humans} humans, ${m.players.bots} bots, ${m.players.swarm} swarm`;
+
+    setMs($("tickP95"), m.tick.p95Ms);
+    grade($("tickP95"), m.tick.p95Ms, m.tick.budgetMs * 0.25, m.tick.budgetMs * 0.75);
+    $("tickNote").textContent =
+      `p50 ${fixed(m.tick.p50Ms)} ms of ${m.tick.budgetMs.toFixed(1)} ms budget`;
+
+    setMs($("loopP95"), m.eventLoop.p95Ms);
+    grade($("loopP95"), m.eventLoop.p95Ms, 16, 33);
+
+    $("queue").textContent = m.queue.depth;
+    $("queueNote").textContent =
+      `Wait p50 ${(m.queue.waitP50Ms / 1000).toFixed(1)} s, p95 ${(m.queue.waitP95Ms / 1000).toFixed(1)} s`;
+
+    $("overruns").textContent = m.tick.overruns;
+    grade($("overruns"), m.tick.overruns, 1, 30);
+    $("reliabilityNote").textContent =
+      `Ticks over budget, of ${m.tick.total.toLocaleString()}. ` +
+      `${m.rounds.completed} rounds, ${m.rounds.roomErrors} room errors, ` +
+      `${Math.floor(m.uptimeSeconds / 60)} min up, ${m.memoryMb} MB`;
+
+    pushHistory(history.players, m.players.total);
+    pushHistory(history.tick, m.tick.p95Ms);
+    spark("playersSpark", history.players);
+    spark("tickSpark", history.tick);
+
+    $("start").disabled = m.swarm.running;
+    $("stop").disabled = !m.swarm.running;
+    $("swarmNote").textContent = m.swarm.running
+      ? `${m.swarm.connected} of ${m.swarm.target} clients running`
+      : "Idle";
+  }
+
+  async function swarmCall(path, body) {
+    const send = () => fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-ops-token": readToken() },
+      body: JSON.stringify(body || {}),
+    });
+    let res = await send();
+    if (res.status === 401) {
+      const token = prompt("Ops token");
+      if (!token) return;
+      saveToken(token);
+      res = await send();
+    }
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      $("swarmNote").textContent = detail.error || `Request failed (${res.status})`;
+    }
+  }
+
+  $("start").addEventListener("click", () => {
+    swarmCall("/api/swarm/start", { count: Number($("count").value) });
+  });
+  $("stop").addEventListener("click", () => swarmCall("/api/swarm/stop"));
+
+  function connect() {
+    const stream = new EventSource("/api/metrics-stream");
+    stream.onopen = () => {
+      $("status").textContent = "Live";
+      $("status").className = "live";
+    };
+    stream.onmessage = (event) => render(JSON.parse(event.data));
+    stream.onerror = () => {
+      $("status").textContent = "Reconnecting";
+      $("status").className = "";
+    };
+  }
+  connect();
+</script>
+</body>
+</html>

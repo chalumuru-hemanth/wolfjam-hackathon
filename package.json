@@ -1,0 +1,20 @@
+{
+  "name": "wolfjam",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["shared", "server"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "start": "npm run start -w server",
+    "typecheck": "tsc --noEmit -p shared && tsc --noEmit -p server",
+    "test": "node --import tsx --test shared/src/sim.test.ts server/src/server.test.ts",
+    "smoke": "tsx scripts/smoke.ts http://localhost:2567",
+    "abuse": "tsx scripts/abuse.ts http://localhost:2567"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
