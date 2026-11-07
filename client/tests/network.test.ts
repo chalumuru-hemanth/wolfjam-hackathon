@@ -3,16 +3,22 @@ import test from 'node:test';
 import { NetworkSession } from '../src/network/NetworkSession.ts';
 import type { Every, RoomConnection } from '../src/network/NetworkSession.ts';
 import type { WireInput } from '../src/network/contract.ts';
-import { INPUT_INTERVAL_MS, readFx, readPlayers, readRoundResult } from '../src/network/contract.ts';
+import { INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRoundResult } from '../src/network/contract.ts';
 import { readNetworkConfig } from '../src/network/config.ts';
 import { interpolate } from '../src/network/interpolation.ts';
 import { createPlayerId, getStoredPlayerId, saveToken, storedToken } from '../src/network/identity.ts';
+import { GAME } from '../src/game/config.ts';
+import type { GameEvent } from '../src/game/types.ts';
 
 const STOP = { moveX: 0, moveY: 0, actionHeld: false, actionPressed: false };
 const ZERO = { moveX: 0, moveY: 0, action: false };
 const config = { endpoint: 'http://example.com:2567', roomName: 'wait' };
-const player = (score = 0) => ({ x: 800, y: 450, score, handle: 'Copper Wolf', kind: 'human', actionReady: true, stunned: false, connected: true });
-const state = (phase = 'playing', secondsLeft = 60, score = 0) => ({ players: new Map([['self', player(score)]]), phase, secondsLeft });
+const player = (score = 0) => ({ score, handle: 'Copper Wolf', kind: 'human', connected: true });
+const body = () => ({ x: 800, y: 450, actionReady: true, stunned: false, exposed: false, shielded: false });
+const state = (phase = 'playing', secondsLeft = 60, score = 0) => ({
+  players: new Map([['self', player(score)]]), bodies: new Map([['self', body()]]), phase, secondsLeft,
+  beaconX: 500, beaconY: 400, beaconNextX: 500, beaconNextY: 400, beaconMovesIn: 8, lastLight: false,
+});
 
 class Signals<T extends unknown[]> {
   callbacks = new Set<(...args: T) => void>();
@@ -47,7 +53,8 @@ test('reads supplied schema, server handles, bot flags, and removals after the f
   const network = new NetworkSession(async () => room, config, 30000, timer.every);
   t.after(() => network.destroy());
   await network.join(); assert.equal(network.status.phase, 'connecting');
-  room.patch({ ...state(), players: new Map([['self', player()], ['bot', { ...player(), handle: 'Bot Wolf', kind: 'bot' }]]) });
+  room.patch({ ...state(), players: new Map([['self', player()], ['bot', { ...player(), handle: 'Bot Wolf', kind: 'bot' }]]),
+    bodies: new Map([['self', body()], ['bot', body()]]) });
   assert.equal(network.connected, true); assert.equal(network.status.count, 2);
   assert.equal(network.players.get('bot')?.kind, 'bot');
   assert.equal(network.players.get('self')?.handle, 'Copper Wolf');
@@ -106,7 +113,7 @@ test('fx uses by/hits; authoritative score deltas create popups without awarding
   const room = new FakeRoom(); const timer = new ManualTimer();
   const network = new NetworkSession(async () => room, config, 30000, timer.every); t.after(() => network.destroy());
   const events: unknown[] = []; network.onEvent((event) => events.push(event));
-  await network.join(); room.fx.emit({ by: 'self', x: 800, y: 450, hits: ['self'] });
+  await network.join(); room.fx.emit({ by: 'self', x: 800, y: 450, hits: [{ id: 'bot', x: 900, y: 450, gain: 5, lost: 3 }] });
   assert.equal(events.length, 2); assert.equal(network.players.get('self')?.score, 0);
   room.patch(state('playing', 59, 2));
   assert.equal(events.length, 3); assert.equal(network.players.get('self')?.score, 2);
@@ -158,7 +165,7 @@ test('timeout race cannot overwrite a successful retry', async (t) => {
 test('schema mismatch clears state and every room listener/timer', async () => {
   const room = new FakeRoom(); const timer = new ManualTimer();
   const network = new NetworkSession(async () => room, config, 30000, timer.every);
-  await network.join(); room.patch({ ...state(), players: new Map([['self', { ...player(), x: Number.NaN }]]) });
+  await network.join(); room.patch({ ...state(), bodies: new Map([['self', { ...body(), x: Number.NaN }]]) });
   assert.equal(network.status.phase, 'error'); assert.equal(network.players.size, 0);
   assert.equal(timer.callbacks.size, 0);
   assert.equal([room.states, room.errors, room.departures, room.drops, room.reconnects, room.fx, room.results].every((signal) => signal.callbacks.size === 0), true);
@@ -198,9 +205,73 @@ test('interpolation remains frame-rate independent with large-jump snapping', ()
   assert.deepEqual(interpolate(origin, { x: 800, y: 450 }, 16), { x: 800, y: 450 });
 });
 
+test('a roster entry with no body is a hidden player with no position', () => {
+  const players = readPlayers({
+    players: new Map([['self', player()], ['rival', { ...player(7), handle: 'Rival' }]]),
+    bodies: new Map([['self', body()]]),
+  });
+  assert.equal(players.get('self')?.visible, true);
+  const rival = players.get('rival')!;
+  assert.equal(rival.visible, false);
+  assert.equal(rival.score, 7, 'the scoreboard stays public');
+  assert.equal(rival.actionReady, undefined);
+  assert.deepEqual([rival.x, rival.y], [0, 0]);
+});
+
+test('a first patch with no bodies at all is not an error', () => {
+  assert.equal(readPlayers({ players: new Map([['self', player()]]) }).get('self')?.visible, false);
+});
+
+test('a hit carries its own position, because the victim may be hidden from this client', () => {
+  const events = readFx({ by: 'self', x: 800, y: 450, hits: [{ id: 'unseen', x: 950, y: 450, gain: 4, lost: 2 }] });
+  assert.deepEqual(events[1], { type: 'hit', playerId: 'unseen', sourceId: 'self', x: 950, y: 450, lost: 2 });
+});
+
+test('the beacon reads as a warning only once its next spot is announced', () => {
+  const quiet = readBeacon(state());
+  assert.equal(quiet.beacon?.warning, false);
+  assert.equal(quiet.lastLight, false);
+  const warned = readBeacon({ ...state(), beaconNextX: 1200, beaconNextY: 300, lastLight: true });
+  assert.equal(warned.beacon?.warning, true);
+  assert.equal(warned.beacon?.nextX, 1200);
+  assert.equal(warned.lastLight, true);
+  assert.equal(readBeacon({ phase: 'waiting' }).beacon, undefined);
+});
+
+test('hidden scores never produce a popup, because there is nowhere to put one', async (t) => {
+  const room = new FakeRoom(); const timer = new ManualTimer();
+  const network = new NetworkSession(async () => room, config, 30000, timer.every); t.after(() => network.destroy());
+  const events: GameEvent[] = []; network.onEvent((event) => events.push(event));
+  await network.join();
+  room.patch({ ...state(), players: new Map([['self', player()], ['rival', player()]]) });
+  room.patch({ ...state(), players: new Map([['self', player()], ['rival', player(9)]]) });
+  assert.equal(events.filter((event) => event.type === 'score').length, 0);
+});
+
+test('session exposes the beacon and clears it when leaving', async () => {
+  const room = new FakeRoom(); const timer = new ManualTimer();
+  const network = new NetworkSession(async () => room, config, 30000, timer.every);
+  await network.join();
+  assert.equal(network.beacon?.x, 500);
+  network.destroy();
+  assert.equal(network.beacon, undefined);
+});
+
+test('the flash cooldown counts down from the moment the server reports it', async (t) => {
+  let now = 1000; t.mock.method(Date, 'now', () => now);
+  const room = new FakeRoom(); const timer = new ManualTimer();
+  const network = new NetworkSession(async () => room, config, 30000, timer.every); t.after(() => network.destroy());
+  await network.join();
+  assert.equal(network.cooldownMs, 0);
+  room.patch({ ...state(), bodies: new Map([['self', { ...body(), actionReady: false }]]) });
+  assert.equal(network.cooldownMs, GAME.actionCooldownMs);
+  now += 1000;
+  assert.equal(network.cooldownMs, GAME.actionCooldownMs - 1000);
+});
+
 test('contract rejects malformed actors/fx/results', () => {
   assert.equal(readPlayers(state()).size, 1);
   assert.throws(() => readPlayers({ users: [] }), /MapSchema/);
-  assert.deepEqual(readFx({ by: 'self', x: 0, y: 0, hits: [4] }, new Map()), []);
+  assert.deepEqual(readFx({ by: 'self', x: 0, y: 0, hits: [4] }), []);
   assert.equal(readRoundResult({ winners: ['self'], standings: [{ id: 'self' }] }), undefined);
 });

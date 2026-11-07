@@ -58,7 +58,7 @@ async function playFullRound(): Promise<void> {
 
   check("bots fill the room to 4", await waitFor(() => arena.state.players?.size === 4, 3000));
 
-  const me = () => arena.state.players.get(arena.sessionId);
+  const me = () => arena.state.bodies.get(arena.sessionId);
   check("round reaches playing", await waitFor(() => arena.state.phase === "playing", 6000));
 
   const startX = me()?.x ?? 0;
@@ -103,7 +103,8 @@ async function dropAndReconnect(): Promise<void> {
 
   const session = arena.sessionId;
   const input = arena.input<PlayerInput>();
-  const me = () => arena.state.players.get(session);
+  const me = () => arena.state.bodies.get(session);
+  const presence = () => arena.state.players.get(session);
   const reconnected = new Promise<boolean>((resolve) => {
     arena.onReconnect(() => resolve(true));
     setTimeout(() => resolve(false), 9000);
@@ -111,7 +112,7 @@ async function dropAndReconnect(): Promise<void> {
   // A non-consented close looks exactly like a network failure to the server.
   arena.connection.close();
   check("dropped client reconnects inside the hold", await reconnected);
-  check("server marks the player connected again", await waitFor(() => me()?.connected === true, 2000));
+  check("server marks the player connected again", await waitFor(() => presence()?.connected === true, 2000));
 
   // The real proof: after reconnecting, input must still drive the same player.
   const beforeX = me()?.x ?? 0;

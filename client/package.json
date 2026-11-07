@@ -17,6 +17,7 @@
     "@colyseus/sdk": "0.18.9",
     "@fontsource/barlow-condensed": "5.3.0",
     "@fontsource/dm-sans": "5.3.0",
+    "@wolfjam/shared": "*",
     "phaser": "4.1.0",
     "qrcode": "1.5.4"
   },

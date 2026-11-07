@@ -174,10 +174,17 @@
     if (room && room.state.players) {
       const phase = room.state.phase;
       if (phase !== "results") setState(`${phase} ${room.state.secondsLeft ?? ""}`);
+      ctx.fillStyle = "rgba(255, 214, 120, 0.16)";
+      ctx.beginPath();
+      ctx.arc(room.state.beaconX, room.state.beaconY, 135, 0, Math.PI * 2);
+      ctx.fill();
       room.state.players.forEach((player, id) => {
-        const last = shown.get(id) || { x: player.x, y: player.y };
-        last.x += (player.x - last.x) * INTERPOLATION_SPEED;
-        last.y += (player.y - last.y) * INTERPOLATION_SPEED;
+        // No body means the server has not told us where this player is.
+        const body = room.state.bodies && room.state.bodies.get(id);
+        if (!body) { shown.delete(id); return; }
+        const last = shown.get(id) || { x: body.x, y: body.y };
+        last.x += (body.x - last.x) * INTERPOLATION_SPEED;
+        last.y += (body.y - last.y) * INTERPOLATION_SPEED;
         shown.set(id, last);
 
         const mine = id === room.sessionId;

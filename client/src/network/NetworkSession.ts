@@ -1,8 +1,8 @@
 import type { InputFrame } from '../input/InputState.ts';
 import type { NetworkConfig } from './config.ts';
-import { encodeInput, INPUT_INTERVAL_MS, readFx, readPlayers, readRound, readRoundResult } from './contract.ts';
+import { encodeInput, INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRound, readRoundResult } from './contract.ts';
 import type { WireInput } from './contract.ts';
-import type { GameEvent, GameSession, PlayerSnapshot, RoundResult, RoundSnapshot, TargetSnapshot } from '../game/types.ts';
+import type { BeaconSnapshot, GameEvent, GameSession, PlayerSnapshot, RoundResult, RoundSnapshot } from '../game/types.ts';
 import { GAME } from '../game/config.ts';
 
 export interface RoomConnection {
@@ -32,7 +32,8 @@ const STOP: InputFrame = { moveX: 0, moveY: 0, actionHeld: false, actionPressed:
 export class NetworkSession implements GameSession {
   readonly mode = 'online' as const;
   readonly players = new Map<string, PlayerSnapshot>();
-  readonly targets = new Map<string, TargetSnapshot>();
+  beacon: BeaconSnapshot | undefined;
+  lastLight = false;
   round: RoundSnapshot = { phase: 'lobby', roundId: '0' };
   roundResult: RoundResult | undefined;
   private room: RoomConnection | undefined;
@@ -51,6 +52,7 @@ export class NetworkSession implements GameSession {
   private stopTimer: (() => void) | undefined;
   private latest = { ...STOP };
   private pendingAction = false;
+  private cooldownEnd = 0;
   private currentStatus: ConnectionStatus = { phase: 'idle', message: '', count: 0 };
 
   constructor(connectRoom: ConnectRoom, config: NetworkConfig, timeoutMs = 30000, every: Every = defaultEvery) {
@@ -59,7 +61,10 @@ export class NetworkSession implements GameSession {
   get status(): ConnectionStatus { return this.currentStatus; }
   get connected(): boolean { return this.status.phase === 'connected' || this.status.phase === 'reconnecting'; }
   get remainingMs(): number { return Math.max(0, this.roundDeadline - Date.now()); }
-  get cooldownMs(): number { return this.players.get(this.status.sessionId ?? '')?.actionReady === false ? GAME.actionCooldownMs : 0; }
+  get cooldownMs(): number {
+    if (this.players.get(this.status.sessionId ?? '')?.actionReady !== false) return 0;
+    return Math.max(0, this.cooldownEnd - Date.now());
+  }
   // Online rounds start/requeue on the server; these shared-interface controls are practice-only.
   ready(_value: boolean): void {}
   rematch(): void {}
@@ -99,9 +104,15 @@ export class NetworkSession implements GameSession {
           const scoring: GameEvent[] = [];
           snapshot.forEach((player, id) => {
             const previous = this.players.get(id);
-            if (previous && player.score > previous.score) scoring.push({ type: 'score', playerId: id, x: player.x, y: player.y, amount: player.score - previous.score });
+            const amount = player.score - (previous?.score ?? player.score);
+            // Others' beacon points tick constantly, so only their big swings show.
+            if (player.visible && (id === room.sessionId ? amount > 0 : amount >= 2)) scoring.push({ type: 'score', playerId: id, x: player.x, y: player.y, amount });
           });
+          const wasReady = this.players.get(room.sessionId)?.actionReady !== false;
+          if (wasReady && snapshot.get(room.sessionId)?.actionReady === false) this.cooldownEnd = Date.now() + GAME.actionCooldownMs;
           this.players.clear(); snapshot.forEach((player, id) => this.players.set(id, player));
+          const light = readBeacon(state);
+          this.beacon = light.beacon; this.lastLight = light.lastLight;
           if (!snapshot.has(room.sessionId)) {
             if (this.connected && this.round.phase !== 'results') this.fail('Your player left the arena. Find a new match.');
             return;
@@ -136,7 +147,7 @@ export class NetworkSession implements GameSession {
           this.publish({ ...this.status, phase: 'connected', message: '' });
           this.sendInput(STOP); this.startInputTimer();
         }),
-        room.onFx((value) => { if (attempt === this.generation) readFx(value, this.players).forEach((event) => this.emit(event)); }),
+        room.onFx((value) => { if (attempt === this.generation) readFx(value).forEach((event) => this.emit(event)); }),
         room.onRoundResult((value) => {
           if (attempt !== this.generation) return;
           const result = readRoundResult(value);
@@ -184,7 +195,7 @@ export class NetworkSession implements GameSession {
     this.abort?.abort(); this.abort = undefined;
     this.unsubscribers.forEach((unsubscribe) => unsubscribe()); this.unsubscribers = [];
     const room = this.room; this.room = undefined;
-    this.players.clear(); this.targets.clear(); this.roundResult = undefined;
+    this.players.clear(); this.beacon = undefined; this.lastLight = false; this.roundResult = undefined;
     this.round = { phase: 'lobby', roundId: '0' }; this.serverRemaining = -1; this.roundDeadline = 0;
     if (room) void room.leave().catch(() => {});
   }

@@ -31,7 +31,7 @@ const audio = new AudioBus();
 const arena = new ArenaScene(controls, session, audio);
 const hud = new TouchHudScene(controls, session);
 const game = new Phaser.Game({
-  type: Phaser.AUTO, parent: 'game', backgroundColor: '#101827', antialias: true,
+  type: Phaser.AUTO, parent: 'game', backgroundColor: '#05070d', antialias: true,
   scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
   input: { activePointers: 3, keyboard: false, touch: { capture: true } },
   scene: [arena, hud],
@@ -98,6 +98,8 @@ game.canvas.addEventListener('pointercancel', onCancel, { passive: true });
 game.scale.on(Phaser.Scale.Events.RESIZE, reset);
 void prepareJoin();
 if (config.endpoint && storedToken(config.endpoint)) void session.join();
+let flashes = 0;
+session.onEvent((event) => { if (event.type === 'action' && event.playerId === session.status.sessionId) flashes++; });
 const render = (): void => { ui.render(); syncInput(); animation = requestAnimationFrame(render); };
 animation = requestAnimationFrame(render);
 
@@ -106,7 +108,7 @@ if (import.meta.env.DEV) {
   window.__wolfjam = () => ({
     mode: session.mode, phase: session.round.phase, remainingMs: session.remainingMs,
     player: session.players.get(session.status.sessionId ?? ''), inputEnabled: controls.active,
-    playerCount: session.players.size, audioState: audio.state, audioLoaded: audio.loaded,
+    playerCount: session.players.size, audioState: audio.state, audioLoaded: audio.loaded, flashes, beacon: session.beacon,
   });
 }
 

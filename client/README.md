@@ -1,4 +1,4 @@
-# Wolfjam Arena — Phaser client
+# Nightlight: Phaser client
 
 Phaser 4.1.0, Vite, and strict TypeScript. Touch joystick + action button, WASD + Space, HTML title/lobby/countdown/results, 60-second practice rounds, interpolation, shake, particles, hit feedback, score popups, and four local CC0 sounds.
 
@@ -17,7 +17,7 @@ For manual startup, use Node 24 (minimum 22.18):
 
 Open the HTTP Local/Network URL printed by Vite. Opening index.html directly from Explorer cannot load the TypeScript app; it now shows launch help and a link to the working server instead of an unstyled game screen.
 
-In a standalone development checkout without a server URL, **Play practice → Ready · Start practice** runs the full local loop. Coral sparks are a replaceable practice rule while the theme/final verb is pending. Solo practice does not simulate other people or connect to a hidden backend.
+In a standalone development checkout without a server URL, **Play practice → Ready · Start practice** runs the real game rules and bots on this device, so it also works without a network.
 
 ## Connect Sylesh's server
 
@@ -99,7 +99,6 @@ A temporary real Colyseus fixture verified queue → reservation → arena, six 
 - [ ] Simultaneous movement/action, releasing fingers in either order/outside controls.
 - [ ] Background/rotate/reload and recover without stale movement.
 - [ ] Real wait queue, human/bot actors, cooldown/stun, results/ties, 8-second requeue, and reconnect on Sylesh's implementation.
-- [ ] Replace neutral action presentation/practice rule with the revealed theme.
 
 ## Credits
 

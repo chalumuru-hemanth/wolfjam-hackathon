@@ -25,6 +25,21 @@ Built the authoritative server, custom queue, bots, SQLite leaderboard, ops cons
 
 - Client prediction, skill ratings, and AI balance testing. The game has to be fun first, and these would all have competed with that.
 
-## Theme and verb
+## Theme: Visibility
 
-_To fill in once the theme is out._
+The game became **Nightlight**, built on one rule: to score, you must be seen. A moving beacon pays points but exposes you, and your one verb, Flash, steals from others but lights you up. See [DESIGN.md](DESIGN.md).
+
+The important decision was enforcing the theme in the netcode. Hidden positions never leave the server, so a modified client cannot read where hidden players are.
+
+**Found by simulating and testing**
+
+- The first tuning barely had a dark at all: only 18% of positions were hidden. Being hit exposed you for as long as flashing did, which was most of the problem.
+- Flashes resolved in join order, so joining first was an advantage. Now they land together.
+- The beacon could make a short jump, because the search kept its last attempt instead of its best.
+- Screenshots caught what tests could not: a thick hatched flash ring, and the status label covering the objective on phones.
+- The load test proved per-client filtering is cheap: 1,200 clients with 3 ticks over budget out of 358,876.
+
+**Cut on purpose**
+
+- Walls and line of sight. Distance alone gives the same tension, and costs far less to build and to read on a phone.
+- Footstep sounds and other partial clues. They could be added if the dark feels too blind.

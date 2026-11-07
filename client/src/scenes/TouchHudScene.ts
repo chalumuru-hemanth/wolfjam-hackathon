@@ -34,7 +34,7 @@ export class TouchHudScene extends Phaser.Scene {
     this.sparks = this.add.particles(0, 0, 'spark', {
       emitting: false, maxParticles: 80, lifespan: 300, speed: { min: 70, max: 180 },
       scale: { start: 0.7, end: 0 }, alpha: { start: 1, end: 0 }, gravityY: 200,
-      tint: [COLORS.coral, COLORS.white],
+      tint: [COLORS.gold, COLORS.white],
     }).setDepth(3);
     this.game.events.on('action-feedback', this.onAction, this);
     this.input.on('pointerdown', this.onDown, this);
@@ -136,12 +136,12 @@ export class TouchHudScene extends Phaser.Scene {
     graphics.fillStyle(COLORS.cyan, active ? 1 : 0.3).fillCircle(joystickX + this.stickX, controlY + this.stickY, 22);
     graphics.lineStyle(1, COLORS.white, 0.35).strokeCircle(joystickX + this.stickX, controlY + this.stickY, 22);
     const held = this.controls.actionHeld;
-    graphics.lineStyle(1, COLORS.coral, 0.25).strokeCircle(actionX, controlY, RADIUS + 6);
-    graphics.fillStyle(0x9c4149).fillCircle(actionX, controlY + (held ? 2 : 5), RADIUS);
+    graphics.lineStyle(1, COLORS.gold, 0.25).strokeCircle(actionX, controlY, RADIUS + 6);
+    graphics.fillStyle(0x9a7420).fillCircle(actionX, controlY + (held ? 2 : 5), RADIUS);
     const self = this.session.players.get(this.session.status.sessionId ?? '');
     const available = self?.actionReady !== false && !self?.stunned && this.session.cooldownMs === 0;
     this.actionLabel.setText(self?.stunned ? 'STUNNED' : available ? GAME.actionLabel : 'WAIT');
-    graphics.fillStyle(held && available ? COLORS.white : available ? COLORS.coral : 0x738197, active ? 1 : 0.3)
+    graphics.fillStyle(held && available ? COLORS.white : available ? COLORS.gold : 0x738197, active ? 1 : 0.3)
       .fillCircle(actionX, controlY + (held ? 3 : 0), held ? RADIUS - 3 : RADIUS);
     this.actionLabel.setY(controlY + (held ? 3 : 0));
     const cooldown = Math.min(1, this.session.cooldownMs / GAME.actionCooldownMs);

@@ -3,6 +3,8 @@ import { standings } from '../game/types';
 import { GAME } from '../game/config';
 import { AudioBus } from '../audio/AudioBus';
 
+const OBJECTIVE_MS = 8000;
+
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing UI element: ${id}`);
@@ -28,7 +30,7 @@ export class GameUi {
 
   constructor(session: GameSession, audio: AudioBus, configError: string) {
     this.session = session; this.audio = audio; this.configError = configError;
-    document.querySelectorAll<HTMLElement>('[data-objective]').forEach((node) => { node.textContent = session.mode === 'practice' ? GAME.objective : 'Move. Pulse. Outscore the arena.'; });
+    document.querySelectorAll<HTMLElement>('[data-objective]').forEach((node) => { node.textContent = GAME.objective; });
     if (session.mode === 'online') {
       document.querySelector<HTMLElement>('.join-description')!.textContent = 'Scan to enter the match queue.';
       element('join-note').textContent = 'Use the same Wi-Fi for local testing.';
@@ -49,7 +51,9 @@ export class GameUi {
     this.lobby.hidden = this.titleVisible || (session.status.phase !== 'connecting' && (!connected || phase !== 'lobby'));
     this.countdown.hidden = this.titleVisible || !connected || phase !== 'countdown';
     this.results.hidden = this.titleVisible || !connected || phase !== 'results';
-    element('play-objective').hidden = this.titleVisible || !connected || phase !== 'playing';
+    // The rule is on screen for the opening seconds, then the arena is left clear.
+    const opening = session.remainingMs > GAME.roundMs - OBJECTIVE_MS;
+    element('play-objective').hidden = this.titleVisible || !connected || phase !== 'playing' || !opening;
     document.body.classList.toggle('playing', !this.titleVisible && phase === 'playing');
     this.play.disabled = session.status.phase === 'connecting' || Boolean(this.configError);
     this.text('play-label', session.status.phase === 'connecting' ? 'Connecting…' : connected ? 'Back to arena' :
@@ -65,6 +69,7 @@ export class GameUi {
     this.text('lobby-note', session.mode === 'practice' ? 'A quick practice round on this device.' : session.status.phase === 'connecting' ?
       'A solo match fills with bots after 5 seconds. Six players start immediately.' : 'Your round starts automatically.');
     this.text('hud-score', String(self?.score ?? 0));
+    this.renderVisibility(phase === 'playing' ? self?.exposed === true : undefined);
     const seconds = Math.ceil(session.remainingMs / 1000);
     this.text('hud-timer', phase === 'lobby' ? '60' : String(seconds).padStart(2, '0'));
     element('hud-timer').classList.toggle('urgent', phase === 'playing' && seconds <= 10);
@@ -76,6 +81,18 @@ export class GameUi {
     this.text('again-label', session.mode === 'online' ? seconds > 0 ? `Next match in ${seconds}s` : 'Finding next match…' : 'Play again');
     this.renderRoster();
     if (phase === 'results') this.renderResults();
+  }
+
+  /** The most important fact in the game: can everyone see you right now? */
+  private renderVisibility(exposed: boolean | undefined): void {
+    const chip = element('visibility-chip');
+    chip.hidden = exposed === undefined || this.titleVisible;
+    this.text('visibility-label', this.session.lastLight ? 'LAST LIGHT' : exposed ? 'EXPOSED' : 'HIDDEN');
+    chip.dataset.state = this.session.lastLight ? 'last' : exposed ? 'exposed' : 'hidden';
+    const leader = [...this.session.players.values()].sort((a, b) => b.score - a.score)[0];
+    const self = this.session.players.get(this.session.status.sessionId ?? '');
+    const leading = leader !== undefined && leader === self;
+    this.text('hud-leader', leader && leader.score > 0 ? `${leading ? 'YOU' : leader.handle ?? 'LEADER'} ${leader.score}` : '–');
   }
 
   private text(id: string, value: string): void { const node = element(id); if (node.textContent !== value) node.textContent = value; }
@@ -110,7 +127,7 @@ export class GameUi {
     const win = own !== undefined && winners.includes(own.id);
     this.text('results-title', win ? winners.length > 1 ? 'Shared win.' : 'Nicely done.' : 'Round complete.');
     this.text('results-score', String(own?.score ?? 0));
-    this.text('results-caption', this.session.mode === 'online' && !result ? 'Final scores incoming…' : win ? 'Every pulse counted.' : 'One more round?');
+    this.text('results-caption', this.session.mode === 'online' && !result ? 'Final scores incoming…' : win ? 'Seen at exactly the right moments.' : 'The dark is waiting. One more round?');
     const board = element('results-list'); board.replaceChildren();
     rows.forEach((row) => {
       const item = document.createElement('li'); item.className = row.id === own?.id ? 'result-row self' : 'result-row';

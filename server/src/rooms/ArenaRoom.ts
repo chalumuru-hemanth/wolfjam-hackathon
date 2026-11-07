@@ -1,3 +1,4 @@
+import { StateView } from "@colyseus/schema";
 import {
   Room,
   ServerError,
@@ -7,29 +8,38 @@ import {
   type StepContext,
 } from "colyseus";
 import {
+  announcedSpot,
   applyInput,
   ArenaState,
+  BodyState,
+  BOTS,
+  botStyle,
+  canSee,
   createPlayer,
+  createWorld,
+  decide,
   IDLE_INPUT,
   InputFrame,
+  isExposed,
   MATCH,
   MESSAGES,
   NET,
   PlayerState,
   PLAYER_KINDS,
   ROUND,
+  seededRandom,
   spawnPoint,
   stepWorld,
-  BOTS,
   type ArenaJoinOptions,
+  type BotStyle,
   type Phase,
   type PlayerInput,
   type PlayerKind,
   type RoundResult,
   type RoundStanding,
   type SimPlayer,
+  type World,
 } from "@wolfjam/shared";
-import { decide } from "../bots/brain.ts";
 import { generateHandle, store } from "../db.ts";
 import { ROOM_KEY } from "../matchmaking.ts";
 import { metrics, type RoomSnapshot } from "../metrics.ts";
@@ -40,20 +50,23 @@ interface ArenaCreateOptions {
   roomKey: string;
 }
 
-const FORBIDDEN = 403;
-/** About 30 inputs a second normally, with headroom for bursts after a stall. */
-const MAX_MESSAGES_PER_SECOND = 120;
-
 interface Slot {
   sim: SimPlayer;
-  view: PlayerState;
+  player: PlayerState;
+  body: BodyState;
   input: PlayerInput;
+  /** Set for bots, which have no client. */
+  style?: BotStyle;
 }
 
 /** Everyone who took part this round, including players who have since left. */
 interface RosterEntry extends RoundStanding {
   playerId: string;
 }
+
+const FORBIDDEN = 403;
+/** About 30 inputs a second normally, with headroom for bursts after a stall. */
+const MAX_MESSAGES_PER_SECOND = 120;
 
 const PHASE_SECONDS: Record<Exclude<Phase, "waiting">, number> = {
   countdown: ROUND.countdownSeconds,
@@ -82,7 +95,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
   private readonly slots = new Map<string, Slot>();
   private readonly bots = new Set<string>();
   private readonly roster = new Map<string, RosterEntry>();
-  private simPlayers: SimPlayer[] = [];
+  private readonly world: World = createWorld(seededRandom(Date.now() & 0x7fffffff));
   private expected = 0;
   private phaseTicksLeft = secondsToTicks(ROUND.joinTimeoutSeconds);
   private tickCount = 0;
@@ -93,6 +106,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
     }
     this.expected = options.expected;
     this.state.phase = "waiting";
+    this.syncBeacon();
     // Seats only come from the matchmaker, so this room is never listed.
     await this.setPrivate(true);
     metrics.registerRoom(this.roomId, () => this.snapshot());
@@ -109,21 +123,24 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
   }
 
   override onJoin(client: Client, options: ArenaJoinOptions): void {
-    const handle = options.handle;
-    this.addPlayer(client.sessionId, options.playerId, handle, parseKind(options.kind));
+    client.view = new StateView();
+    client.view.add(this.state.bodies);
+
+    this.addPlayer(client.sessionId, options.playerId, options.handle, parseKind(options.kind));
     if (this.state.phase === "waiting") {
       if (this.clients.length >= this.expected) this.beginRound();
-      return;
+    } else {
+      // A slow phone can arrive after the round began. Without this it would
+      // start in the top-left corner, away from the spawn ring.
+      const spawn = spawnPoint(this.world.players.length - 1, MATCH.maxPlayers);
+      const sim = this.slots.get(client.sessionId)?.sim;
+      if (sim) {
+        sim.x = spawn.x;
+        sim.y = spawn.y;
+      }
+      this.syncViews();
     }
-    // A slow phone can arrive after the round began. Without this it would start
-    // in the top-left corner on top of nothing, away from the spawn ring.
-    const spawn = spawnPoint(this.simPlayers.length - 1, MATCH.maxPlayers);
-    const sim = this.slots.get(client.sessionId)?.sim;
-    if (sim) {
-      sim.x = spawn.x;
-      sim.y = spawn.y;
-    }
-    this.syncViews();
+    this.syncVisibility();
   }
 
   /**
@@ -141,34 +158,43 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
   override onDrop(client: Client): void {
     const slot = this.slots.get(client.sessionId);
     if (!slot) return;
-    slot.view.connected = false;
+    slot.player.connected = false;
     slot.input = { ...IDLE_INPUT };
     // Load-test clients never come back, and Kill Swarm must clear at once.
-    if (slot.view.kind !== "swarm") this.allowReconnection(client, ROUND.reconnectSeconds);
+    if (slot.player.kind !== "swarm") this.allowReconnection(client, ROUND.reconnectSeconds);
   }
 
   override onReconnect(client: Client): void {
     const slot = this.slots.get(client.sessionId);
-    if (slot) slot.view.connected = true;
+    if (slot) slot.player.connected = true;
   }
 
   override onLeave(client: Client): void {
     const id = client.sessionId;
     if (!this.slots.delete(id)) return;
     this.state.players.delete(id);
-    this.simPlayers = this.simPlayers.filter((player) => player.id !== id);
+    this.state.bodies.delete(id);
+    this.world.players = this.world.players.filter((player) => player.id !== id);
   }
 
-  private addPlayer(id: string, playerId: string, handle: string, kind: PlayerKind): void {
+  private addPlayer(
+    id: string,
+    playerId: string,
+    handle: string,
+    kind: PlayerKind,
+    style?: BotStyle,
+  ): void {
     const sim = createPlayer(id, 0, 0);
-    const view = new PlayerState();
-    view.handle = handle;
-    view.kind = kind;
-    view.connected = true;
-    view.actionReady = true;
-    this.slots.set(id, { sim, view, input: { ...IDLE_INPUT } });
-    this.simPlayers.push(sim);
-    this.state.players.set(id, view);
+    const player = new PlayerState();
+    player.handle = handle;
+    player.kind = kind;
+    player.connected = true;
+    const body = new BodyState();
+    body.actionReady = true;
+    this.slots.set(id, { sim, player, body, input: { ...IDLE_INPUT }, style });
+    this.world.players.push(sim);
+    this.state.players.set(id, player);
+    this.state.bodies.set(id, body);
     this.roster.set(id, { id, playerId, handle, kind, score: 0 });
   }
 
@@ -178,10 +204,10 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
     for (let i = this.slots.size; i < MATCH.targetPlayers; i++) {
       const id = `bot_${i}`;
       this.bots.add(id);
-      this.addPlayer(id, id, generateHandle(), "bot");
+      this.addPlayer(id, id, generateHandle(), "bot", botStyle(i));
     }
-    this.simPlayers.forEach((player, index) => {
-      const spawn = spawnPoint(index, this.simPlayers.length);
+    this.world.players.forEach((player, index) => {
+      const spawn = spawnPoint(index, this.world.players.length);
       player.x = spawn.x;
       player.y = spawn.y;
     });
@@ -201,6 +227,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
 
     this.readHumanInputs();
     if (this.state.phase === "playing") this.stepPlaying(ctx.dt);
+    this.syncVisibility();
 
     this.phaseTicksLeft--;
     if (this.phaseTicksLeft % NET.tickRate === 0) {
@@ -218,7 +245,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
    */
   private readHumanInputs(): void {
     for (const [id, slot] of this.slots) {
-      if (this.bots.has(id) || !slot.view.connected) continue;
+      if (this.bots.has(id) || !slot.player.connected) continue;
       const frames = this.inputs.get(id).drain();
       const newest = frames[frames.length - 1];
       if (!newest) continue;
@@ -234,7 +261,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
     if (this.tickCount % BOT_DECISION_TICKS === 0) {
       for (const id of this.bots) {
         const slot = this.slots.get(id);
-        if (slot) slot.input = decide(slot.sim, this.simPlayers, Math.random);
+        if (slot?.style) slot.input = decide(slot.sim, this.world, slot.style, this.world.random);
       }
     }
 
@@ -244,23 +271,67 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
       slot.input.action = false;
     }
 
-    for (const event of stepWorld(this.simPlayers, dt)) {
+    for (const event of stepWorld(this.world, dt)) {
       this.broadcast(MESSAGES.fx, event);
     }
     this.syncViews();
+    this.syncBeacon();
   }
 
   private syncViews(): void {
     for (const [id, slot] of this.slots) {
-      const { sim, view } = slot;
-      view.x = Math.round(sim.x);
-      view.y = Math.round(sim.y);
-      view.score = sim.score;
-      view.actionReady = sim.cooldown <= 0;
-      view.stunned = sim.stun > 0;
+      const { sim, player, body } = slot;
+      body.x = Math.round(sim.x);
+      body.y = Math.round(sim.y);
+      body.actionReady = sim.cooldown <= 0;
+      body.stunned = sim.stun > 0;
+      body.exposed = isExposed(this.world, sim);
+      body.shielded = sim.immune > 0;
+      player.score = sim.score;
       const entry = this.roster.get(id);
       if (entry) entry.score = sim.score;
     }
+  }
+
+  private syncBeacon(): void {
+    const { beacon, lastLight } = this.world;
+    const next = announcedSpot(beacon);
+    this.state.beaconX = Math.round(beacon.x);
+    this.state.beaconY = Math.round(beacon.y);
+    this.state.beaconNextX = Math.round(next.x);
+    this.state.beaconNextY = Math.round(next.y);
+    this.state.beaconMovesIn = Math.ceil(beacon.timer);
+    this.state.lastLight = lastLight;
+  }
+
+  /**
+   * The theme, enforced on the wire. A client's view holds only the bodies it is
+   * allowed to see, so a hidden player's position never leaves this server and
+   * no modified client can reveal it. The lights are on outside active play.
+   */
+  private syncVisibility(): void {
+    const lightsOn = this.state.phase !== "playing";
+    let withheld = 0;
+    let pairs = 0;
+
+    for (const client of this.clients) {
+      const viewer = this.slots.get(client.sessionId);
+      const view = client.view;
+      if (!viewer || !view) continue;
+
+      for (const slot of this.slots.values()) {
+        const visible = lightsOn || canSee(this.world, viewer.sim, slot.sim);
+        if (visible !== view.has(slot.body)) {
+          if (visible) view.add(slot.body);
+          else view.remove(slot.body);
+        }
+        if (slot !== viewer) {
+          pairs++;
+          if (!visible) withheld++;
+        }
+      }
+    }
+    metrics.recordVisibility(withheld, pairs);
   }
 
   private advancePhase(): void {
@@ -311,7 +382,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
 
   private snapshot(): RoomSnapshot {
     const counts: Record<PlayerKind, number> = { human: 0, bot: 0, swarm: 0 };
-    for (const slot of this.slots.values()) counts[parseKind(slot.view.kind)]++;
+    for (const slot of this.slots.values()) counts[parseKind(slot.player.kind)]++;
     return { id: this.roomId, phase: this.state.phase, counts };
   }
 }

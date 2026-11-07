@@ -4,28 +4,53 @@ import { schema, t, type SchemaType } from "@colyseus/schema";
  * Network state. Built with schema() rather than decorators so nothing here
  * needs compiler flags. The Phaser client should not import this at runtime:
  * the SDK rebuilds these classes from the join handshake. `import type` is fine.
+ *
+ * Who a player is and where a player is live in separate schemas on purpose.
+ * PlayerState goes to everyone and holds no position. BodyState holds the
+ * position, and the server only sends it to clients allowed to see that player.
  */
 export const PlayerState = schema(
   {
     handle: t.string(),
     kind: t.string(),
-    /** Whole pixels: enough for interpolation and much cheaper to sync. */
-    x: t.int16(),
-    y: t.int16(),
-    score: t.uint16(),
-    actionReady: t.boolean(),
-    stunned: t.boolean(),
+    score: t.uint16().default(0),
     connected: t.boolean(),
   },
   "PlayerState",
 );
 export type PlayerState = SchemaType<typeof PlayerState>;
 
+export const BodyState = schema(
+  {
+    /** Whole pixels: enough for interpolation and much cheaper to sync. */
+    x: t.int16(),
+    y: t.int16(),
+    actionReady: t.boolean(),
+    stunned: t.boolean(),
+    /** Lit up for the whole arena right now. */
+    exposed: t.boolean(),
+    /** Recently tagged, and cannot be tagged again yet. */
+    shielded: t.boolean(),
+  },
+  "BodyState",
+);
+export type BodyState = SchemaType<typeof BodyState>;
+
 export const ArenaState = schema(
   {
     phase: t.string(),
     secondsLeft: t.uint8(),
     players: t.map(PlayerState),
+    /** Filtered per client. A hidden player simply has no entry here. */
+    bodies: t.map(BodyState).view(),
+    beaconX: t.int16(),
+    beaconY: t.int16(),
+    /** Equal to beaconX and beaconY until the next spot is announced. */
+    beaconNextX: t.int16(),
+    beaconNextY: t.int16(),
+    beaconMovesIn: t.uint8(),
+    /** Final stretch: everyone is revealed and the beacon pays double. */
+    lastLight: t.boolean(),
   },
   "ArenaState",
 );

@@ -144,6 +144,12 @@
     </section>
 
     <section class="card">
+      <div class="label">Positions withheld</div>
+      <div class="value good" id="withheld">0<small> %</small></div>
+      <div class="sub" id="withheldNote">Enemy positions never sent to a client</div>
+    </section>
+
+    <section class="card">
       <div class="label">Queue</div>
       <div class="value" id="queue">0</div>
       <div class="sub" id="queueNote">Wait p50 0 s, p95 0 s</div>
@@ -224,6 +230,10 @@
 
     setMs($("loopP95"), m.eventLoop.p95Ms);
     grade($("loopP95"), m.eventLoop.p95Ms, 16, 33);
+
+    $("withheld").firstChild.textContent = Math.round(m.visibility.withheldPercent);
+    $("withheldNote").textContent =
+      `${m.visibility.withheldPositions.toLocaleString()} positions never sent to a client`;
 
     $("queue").textContent = m.queue.depth;
     $("queueNote").textContent =

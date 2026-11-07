@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#101827" />
-    <meta name="description" content="One arena. Sixty seconds. Scan, move, and pulse in Wolfjam Arena." />
+    <meta name="theme-color" content="#05070d" />
+    <meta name="description" content="A multiplayer game of light and dark. To score, you must be seen." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Wolfjam Arena</title>
+    <title>Nightlight</title>
     <style>
       #file-launch { display: none; }
       html[data-file-launch] body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #101827; color: #f4f7fc; font: 16px/1.6 system-ui, sans-serif; }
@@ -24,24 +24,24 @@
       <h1 id="file-launch-title">Open the arena.</h1>
       <p>This is the Vite source file. Start the local server to load the game and its styles.</p>
       <p>In the client folder, double-click <code>PLAY.cmd</code>, or run <code>npm run play</code>. Keep the server window open while playing.</p>
-      <a href="http://localhost:5173/">Open Wolfjam Arena ↗</a>
+      <a href="http://localhost:5173/">Open Nightlight ↗</a>
     </section>
     <div id="app">
-      <div id="game" aria-label="Wolfjam Arena game canvas"></div>
+      <div id="game" aria-label="Nightlight game canvas"></div>
       <header id="game-header" hidden>
-        <span class="wordmark">W<span class="mark-dot">/</span>A <span class="header-title">WOLFJAM ARENA</span></span>
-        <div id="hud-stats"><span class="stat"><span class="stat-label">SCORE</span><strong id="hud-score" aria-live="polite">0</strong></span><span class="stat"><span class="stat-label">SECONDS</span><strong id="hud-timer" role="timer">60</strong></span></div>
+        <span class="wordmark">N<span class="mark-dot">/</span>L <span class="header-title">NIGHTLIGHT</span></span>
+        <div id="hud-stats"><span class="stat"><span class="stat-label">SCORE</span><strong id="hud-score" aria-live="polite">0</strong></span><span class="stat"><span class="stat-label">SECONDS</span><strong id="hud-timer" role="timer">60</strong></span><span class="stat leader-stat"><span class="stat-label">LEAD</span><strong id="hud-leader">–</strong></span></div>
         <div class="header-right"><span class="local-label"><i></i><span id="connection-label">LOCAL</span></span><button id="join-button" class="text-button" type="button">Join QR ↗</button></div>
       </header>
       <section id="title-screen" aria-labelledby="game-title">
         <div class="title-shell">
           <div class="title-main">
             <div class="eyebrow"><span class="live-dot"></span> WOLFJAM 2026 <span class="eyebrow-divider">/</span> 60 SECONDS</div>
-            <h1 id="game-title">Wolfjam<br /><span>Arena<span class="coral">.</span></span></h1>
-            <p class="intro">One arena. Sixty seconds.<br />Get close. Make every pulse count.</p>
+            <h1 id="game-title">Night<br /><span>light<span class="coral">.</span></span></h1>
+            <p class="intro">To score, you must be seen.<br />The light pays you. The dark hunts you.</p>
             <button id="play-button" class="play-button" type="button"><span id="play-label">Play locally</span><span aria-hidden="true">↗</span></button>
             <p id="connection-status" class="connection-status" role="status" aria-live="polite"></p>
-            <p class="control-hint"><span class="keyboard-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move <span class="hint-separator">·</span> <kbd>Space</kbd> pulse</span><span class="touch-hint">Left thumb: move <span class="hint-separator">·</span> Right thumb: pulse</span></p>
+            <p class="control-hint"><span class="keyboard-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move <span class="hint-separator">·</span> <kbd>Space</kbd> flash</span><span class="touch-hint">Left thumb: move <span class="hint-separator">·</span> Right thumb: flash</span></p>
           </div>
           <aside class="join-card" aria-label="Join on your phone">
             <div class="card-index">01 <span>TAKE IT TO YOUR PHONE</span></div>
@@ -56,12 +56,13 @@
       </section>
       <section id="lobby-screen" class="round-overlay" aria-labelledby="lobby-title" hidden>
         <div class="round-panel lobby-panel">
-          <div class="panel-intro"><span id="lobby-mode" class="eyebrow">SOLO PRACTICE</span><h2 id="lobby-title">Ready to<br /><span>make waves?</span></h2><p data-objective>Move close. Pulse coral sparks.</p><p class="panel-note">Most points after 60 seconds wins.</p></div>
+          <div class="panel-intro"><span id="lobby-mode" class="eyebrow">SOLO PRACTICE</span><h2 id="lobby-title">Lights<br /><span>going out.</span></h2><p data-objective>Stand in the light to score. Flash to steal. Both give you away.</p><p class="panel-note">Most points after 60 seconds wins.</p></div>
           <div class="panel-actions"><div id="lobby-roster" class="roster" aria-label="Players in this room"></div><p id="lobby-note" class="panel-note"></p><button id="ready-button" class="play-button" type="button"><span id="ready-label">Ready up</span><span aria-hidden="true">→</span></button></div>
         </div>
       </section>
-      <section id="countdown-screen" aria-label="Round countdown" hidden><span class="eyebrow">GET READY</span><strong id="countdown-number" aria-live="assertive">3</strong><p data-objective>Move close. Pulse coral sparks.</p></section>
-      <div id="play-objective" hidden><span data-objective>Move close. Pulse coral sparks.</span></div>
+      <section id="countdown-screen" aria-label="Round countdown" hidden><span class="eyebrow">GET READY</span><strong id="countdown-number" aria-live="assertive">3</strong><p data-objective>Stand in the light to score. Flash to steal. Both give you away.</p></section>
+      <div id="visibility-chip" data-state="hidden" hidden><i></i><span id="visibility-label">HIDDEN</span></div>
+      <div id="play-objective" hidden><span data-objective>Stand in the light to score. Flash to steal. Both give you away.</span></div>
       <p id="network-banner" role="status" aria-live="polite"></p>
       <section id="results-screen" class="round-overlay" aria-labelledby="results-title" hidden>
         <div class="round-panel results-panel"><div class="result-summary"><span class="eyebrow">TIME'S UP</span><h2 id="results-title">Round complete.</h2><div class="score-total"><strong id="results-score">0</strong><span>YOUR POINTS</span></div><p id="results-caption" class="panel-note">One more round?</p></div><ol id="results-list" aria-label="Round standings"></ol><div class="result-actions"><button id="again-button" class="play-button" type="button"><span id="again-label">Play again</span><span aria-hidden="true">↗</span></button><button id="results-back" class="text-button" type="button">Back to title</button></div></div>

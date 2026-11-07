@@ -2,17 +2,19 @@ import type { InputFrame } from '../input/InputState.ts';
 import type { ConnectionStatus } from '../network/NetworkSession.ts';
 
 export interface Point { x: number; y: number }
+/** x and y mean nothing unless visible is true: the server sent no position. */
 export interface PlayerSnapshot extends Point {
   score: number; ready: boolean; handle?: string; kind?: 'human' | 'bot' | 'swarm';
   actionReady?: boolean; stunned?: boolean; connected?: boolean;
+  visible: boolean; exposed?: boolean; shielded?: boolean;
 }
-export interface TargetSnapshot extends Point { active: boolean }
+export interface BeaconSnapshot extends Point { nextX: number; nextY: number; movesIn: number; warning: boolean }
 export type RoundPhase = 'lobby' | 'countdown' | 'playing' | 'results';
 export interface RoundSnapshot { phase: RoundPhase; roundId: string }
 export interface RoundResult { winners: string[]; standings: Array<{ id: string; handle: string; kind: string; score: number }> }
 export type GameEvent =
   | ({ type: 'action'; playerId: string } & Point)
-  | ({ type: 'hit'; playerId: string; sourceId?: string } & Point)
+  | ({ type: 'hit'; playerId: string; sourceId?: string; lost?: number } & Point)
   | ({ type: 'score'; playerId: string; amount: number } & Point);
 
 /** Both drivers expose the same view. Only PracticeSession simulates gameplay locally. */
@@ -21,7 +23,8 @@ export interface GameSession {
   readonly status: ConnectionStatus;
   readonly connected: boolean;
   readonly players: ReadonlyMap<string, PlayerSnapshot>;
-  readonly targets: ReadonlyMap<string, TargetSnapshot>;
+  readonly beacon: BeaconSnapshot | undefined;
+  readonly lastLight: boolean;
   readonly round: RoundSnapshot;
   readonly remainingMs: number;
   readonly cooldownMs: number;

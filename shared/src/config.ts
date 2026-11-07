@@ -1,13 +1,13 @@
 /**
- * Every number you may want to tune lives here. Server and bots read these,
- * so a tuning pass only touches this file.
+ * Every number you may want to tune lives here. Server, bots and the practice
+ * mode all read these, so a tuning pass only touches this file.
  */
 
-/** Fill these in when the theme is out. They show up on /ops and in the docs. */
 export const GAME_IDENTITY = {
-  name: "Untitled Arena",
-  theme: "TBD",
-  verb: "pulse",
+  name: "Nightlight",
+  theme: "Visibility",
+  verb: "flash",
+  tagline: "To score, you must be seen.",
 } as const;
 
 export const NET = {
@@ -46,23 +46,53 @@ export const MOVE = {
   friction: 1800,
 } as const;
 
-/**
- * Placeholder verb: a radial pulse that knocks nearby players back and scores
- * a point per player hit. Replace with the real verb in sim.ts `resolveAction`.
- */
+/** Who can see whom. The server enforces this, so it cannot be cheated around. */
+export const LIGHT = {
+  /** Anyone this close is visible to you, and you are visible to them. */
+  sightRadius: 115,
+  /** How long flashing lights you up for everyone. This is its price. */
+  exposedSeconds: 1.2,
+  /** Being hit is brief: long enough to see who was caught, then back to dark. */
+  hitExposedSeconds: 0.4,
+  /** The final stretch of a round, when every player is revealed. */
+  lastLightSeconds: 10,
+} as const;
+
+/** The light that pays points and gives you away. */
+export const BEACON = {
+  radius: 110,
+  holdSeconds: 10,
+  /** How long before it moves that the next spot is announced. */
+  warnSeconds: 3,
+  pointsPerSecond: 2,
+  lastLightMultiplier: 1.5,
+  /** Keeps the beacon away from walls, so it can be approached from any side. */
+  margin: 170,
+  /** Each move is far enough that nobody can simply wait for it. */
+  minJump: 520,
+} as const;
+
+/** The verb. Its reach beats sight, so you can flash into the dark on a hunch. */
 export const ACTION = {
-  cooldownSeconds: 1.2,
-  radius: 170,
+  cooldownSeconds: 3.2,
+  radius: 175,
   knockback: 780,
-  stunSeconds: 0.35,
-  pointsPerHit: 1,
+  stunSeconds: 0.6,
+  /** After being hit you cannot be hit again, which prevents stun chains. */
+  immuneSeconds: 1.8,
+  /** Flat reward for landing a tag. */
+  tagPoints: 2,
+  /** Share of the victim's score taken, which keeps a leader catchable. */
+  stealFraction: 0.15,
 } as const;
 
 export const BOTS = {
   /** Bots rethink at this rate, then hold that input between decisions. */
   decisionsPerSecond: 10,
   /** Below 1 stops bots firing the verb the instant they are in range. */
-  actionChancePerDecision: 0.45,
+  actionChancePerDecision: 0.06,
   /** Random sideways drift, so bots do not walk in perfect straight lines. */
   wanderJitter: 0.35,
+  /** How far outside the light a lurking bot waits. */
+  lurkDistance: 120,
 } as const;

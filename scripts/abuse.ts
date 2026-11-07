@@ -72,6 +72,38 @@ async function joinMatch(): Promise<Arena> {
   return arena;
 }
 
+/**
+ * The theme's security claim. Decoded state is exactly what crossed the wire, so
+ * if a position is missing here, no modified client could have read it either.
+ */
+async function checkHiddenPlayersNeverArrive(): Promise<void> {
+  const [a, b] = await Promise.all([joinMatch(), joinMatch()]);
+  check("rivals share a room", a.roomId === b.roomId);
+  await waitFor(() => a.state.phase === "countdown", 6000);
+  check("the lights are on before the round", await waitFor(() => (a.state.bodies?.size ?? 0) >= 2, 2000));
+  await waitFor(() => a.state.phase === "playing", 9000);
+
+  let sawHidden = false;
+  let sawRoster = false;
+  let leak = false;
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    const hidden = [...a.state.players.keys()].filter((id) => !a.state.bodies.has(id));
+    if (hidden.length > 0) sawHidden = true;
+    if (a.state.players.size >= 2) sawRoster = true;
+    for (const id of hidden) {
+      const roster = a.state.players.get(id) as unknown as Record<string, unknown> | undefined;
+      if (roster && ("x" in roster || "y" in roster)) leak = true;
+    }
+    await sleep(25);
+  }
+  check("the dark hides players from a client", sawHidden);
+  check("hidden players stay on the public roster", sawRoster);
+  check("the public roster carries no position", !leak);
+  await a.leave().catch(() => undefined);
+  await b.leave().catch(() => undefined);
+}
+
 const forged = {
   playerId: crypto.randomUUID(),
   handle: FORGED_HANDLE,
@@ -99,7 +131,7 @@ check("malformed queue options do no harm", await healthy());
 
 await waitFor(() => victim.state.phase === "playing", 8000);
 const input = victim.input<PlayerInput>();
-const me = () => victim.state.players.get(victim.sessionId);
+const me = () => victim.state.bodies.get(victim.sessionId);
 
 for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1e308, -1e308]) {
   input.data.moveX = value;
@@ -145,6 +177,8 @@ check("hammering the public metrics route does no harm", await healthy());
 
 const denied = await fetch(`${endpoint}/api/swarm/start`, { method: "POST" });
 check("swarm start refuses a missing token", denied.status === 401, `${denied.status}`);
+
+await checkHiddenPlayersNeverArrive();
 
 // Queued together, so they share a room and one can watch the other's seat.
 const [observer, dropped] = await Promise.all([joinMatch(), joinMatch()]);

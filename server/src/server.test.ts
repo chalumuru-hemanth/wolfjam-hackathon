@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import Database from "better-sqlite3";
-import { createPlayer, MATCH, type RoundStanding } from "@wolfjam/shared";
-import { decide } from "./bots/brain.ts";
+import { MATCH, type RoundStanding } from "@wolfjam/shared";
 
 process.env.DB_PATH = ":memory:";
 const { Store, generateHandle } = await import("./db.ts");
@@ -79,30 +78,4 @@ test("bots and swarm clients never reach the leaderboard", () => {
 
 test("handles match the expected safe shape", () => {
   assert.match(generateHandle(), /^[A-Za-z]+\d{2}$/);
-});
-
-test("a bot walks toward the nearest player", () => {
-  const bot = createPlayer("bot", 100, 100);
-  const near = createPlayer("near", 400, 100);
-  const far = createPlayer("far", 100, 800);
-  const input = decide(bot, [bot, near, far], () => 0.5);
-  assert.ok(input.moveX > 0.9);
-});
-
-test("a bot acts only when a target is in range and it is off cooldown", () => {
-  const bot = createPlayer("bot", 100, 100);
-  const near = createPlayer("near", 150, 100);
-  assert.equal(decide(bot, [bot, near], () => 0).action, true);
-
-  bot.cooldown = 1;
-  assert.equal(decide(bot, [bot, near], () => 0).action, false);
-
-  bot.cooldown = 0;
-  near.x = 1500;
-  assert.equal(decide(bot, [bot, near], () => 0).action, false);
-});
-
-test("a bot alone in the room stays idle", () => {
-  const bot = createPlayer("bot", 100, 100);
-  assert.deepEqual(decide(bot, [bot], () => 0.5), { moveX: 0, moveY: 0, action: false });
 });

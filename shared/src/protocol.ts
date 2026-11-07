@@ -34,11 +34,22 @@ export interface ArenaJoinOptions {
   roomKey: string;
 }
 
+export interface ActionHit {
+  id: string;
+  x: number;
+  y: number;
+  /** Points the flasher gained from this player. */
+  gain: number;
+  /** Points this player lost. */
+  lost: number;
+}
+
+/** A flash is public by design: it gives away the flasher, hit or miss. */
 export interface ActionFx {
   by: string;
   x: number;
   y: number;
-  hits: string[];
+  hits: ActionHit[];
 }
 
 export interface RoundStanding {

@@ -71,28 +71,42 @@ Do not send from `requestAnimationFrame`, and stay well under 120 messages a sec
 |---|---|---|
 | `phase` | string | `waiting`, `countdown`, `playing`, `results` |
 | `secondsLeft` | number | Whole seconds left in the phase |
-| `players` | map | Keyed by session id. Your own entry is `room.sessionId` |
+| `players` | map | The public roster, keyed by session id. Everyone is always listed |
+| `bodies` | map | Positions you are allowed to know. A hidden player has no entry here |
+| `beaconX`, `beaconY` | int | Centre of the light |
+| `beaconNextX`, `beaconNextY` | int | Where it goes next. Equal to the current spot until announced |
+| `beaconMovesIn` | number | Whole seconds until it jumps |
+| `lastLight` | boolean | Final stretch: everyone is revealed |
 
-Each player:
+Each entry in `players`:
 
 | Field | Type | Meaning |
 |---|---|---|
 | `handle` | string | Display name |
 | `kind` | string | `human`, `bot` or `swarm` |
-| `x`, `y` | int | Pixels. Arena is 1600 by 900, player radius 28 |
-| `score` | int | Points this round |
-| `actionReady` | boolean | Verb is off cooldown |
-| `stunned` | boolean | Player cannot act right now |
+| `score` | int | Points this round. Public, even for hidden players |
 | `connected` | boolean | False during a reconnect hold, so show them dimmed |
+
+Each entry in `bodies`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `x`, `y` | int | Pixels. Arena is 1600 by 900, player radius 28 |
+| `actionReady` | boolean | Flash is off cooldown |
+| `stunned` | boolean | Player cannot act right now |
+| `exposed` | boolean | Lit up for the whole arena right now |
+| `shielded` | boolean | Recently tagged, and cannot be tagged again yet |
+
+`room.state.bodies.get(id)` being undefined is not an error. It means that player is in the dark. The server sends no position at all, so there is nothing for the client to reveal. Bodies appear and disappear constantly during play, and everyone is present before and after the round.
 
 ## Messages
 
 | Message | When | Payload |
 |---|---|---|
-| `fx` | Someone used the verb | `{ by, x, y, hits: string[] }` |
+| `fx` | Someone flashed | `{ by, x, y, hits: [{ id, x, y, gain, lost }] }` |
 | `round_result` | Round ended | `{ winners: string[], standings: [{ id, handle, kind, score }] }` |
 
-Register a handler for both. `winners` contains session ids, is empty if nobody scored, and has several entries on a tie.
+A flash is sent to everyone, because it gives away the flasher. Each hit carries its own position, since the victim may be hidden from you. Register a handler for both messages. `winners` contains session ids, is empty if nobody scored, and has several entries on a tie.
 
 ## End of a round
 

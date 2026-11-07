@@ -1,4 +1,4 @@
-:root { font-family: 'DM Sans', system-ui, sans-serif; color: #f4f7fc; background: #101827; font-synthesis: none; --navy: #101827; --cyan: #36d6d0; --coral: #ff746c; }
+:root { font-family: 'DM Sans', system-ui, sans-serif; color: #f4f7fc; background: #101827; font-synthesis: none; --navy: #101827; --cyan: #36d6d0; --coral: #ff746c; --gold: #ffc857; }
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 body { -webkit-tap-highlight-color: transparent; }
@@ -166,3 +166,15 @@ h2 { font-size: 25px; letter-spacing: -1px; margin: 23px 0 8px; }
 #network-banner:empty { display: none; }
 .player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-row > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Visibility: the one status a player must always be able to read. */
+#visibility-chip { pointer-events: none; position: absolute; z-index: 4; top: calc(66px + env(safe-area-inset-top, 0px)); left: 16px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: #05070dcc; border: 1px solid #2a3648; font: 800 16px/1 'Barlow Condensed', Impact, sans-serif; letter-spacing: 1.4px; color: #a7b5c7; transition: color 120ms, border-color 120ms; }
+#visibility-chip i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+#visibility-chip[data-state="exposed"] { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 22px #ffc85755; }
+#visibility-chip[data-state="last"] { color: var(--coral); border-color: var(--coral); box-shadow: 0 0 22px #ff746c55; }
+#hud-leader { color: var(--gold); font-size: 20px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) {
+  .leader-stat { display: none; }
+  #play-objective { top: calc(104px + env(safe-area-inset-top, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { #visibility-chip { transition: none; } }

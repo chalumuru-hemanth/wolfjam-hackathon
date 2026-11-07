@@ -35,26 +35,23 @@ A fixed timer sends approximately 30 times/second even when values are unchanged
 Root:
 - phase: waiting, countdown, playing, results.
 - secondsLeft: whole seconds left in the phase.
-- players: map keyed by room.sessionId.
+- players: public roster keyed by room.sessionId. Everyone is always listed.
+- bodies: positions this client may know. A hidden player has no entry.
+- beaconX, beaconY, beaconNextX, beaconNextY, beaconMovesIn, lastLight.
 
-Player:
-- handle: server-assigned display name.
-- kind: human, bot, swarm.
-- x, y: integer pixels in a 1600×900 arena; radius 28.
-- score: authoritative round points.
-- actionReady: cooldown indicator.
-- stunned: action disabled.
-- connected: false during a reconnect hold; actor is shown dimmed.
+Player: handle, kind, score, connected.
 
-The client maps waiting to its internal lobby view. It displays server time with a local visual countdown between patches; it never ends an online round by itself. Player positions use simple interpolation at rendering frequency. The practice driver's spark targets are not expected in online state.
+Body: x, y, actionReady, stunned, exposed, shielded.
+
+The client maps waiting to its internal lobby view. It displays server time with a local visual countdown between patches; it never ends an online round by itself. Player positions use simple interpolation at rendering frequency. A player with no body is rendered as hidden, and snaps into place when next seen rather than sliding across the arena.
 
 ## Server messages
 
 fx:
 
-    { by: string, x: number, y: number, hits: string[] }
+    { by: string, x: number, y: number, hits: [{ id, x, y, gain, lost }] }
 
-The client creates an action pulse at x/y and hit feedback at known hit-player positions. State score deltas create score popups; fx never awards points. Local hit feedback controls shake/hit pause, while visible remote effects remain cosmetic.
+The client creates a flash at x/y and hit feedback at the positions carried by the message, because a victim may be hidden from this client. State score deltas create score popups; fx never awards points. Local hit feedback controls shake/hit pause, while visible remote effects remain cosmetic.
 
 round_result:
 
@@ -77,4 +74,4 @@ The room reconnect token is kept in sessionStorage, scoped to its endpoint. On r
 
 Unit tests cover the normalized contract and reconnection races. A real Colyseus fixture exercises matchmaking, binary input, six clients, fx, results, reconnect, and automatic requeue. Browser checks exercise a full client and reload restoration against that fixture.
 
-The integrated client was also checked against this repository's actual backend: six humans in one match, binary movement, action effects, reload seat recovery, a full 60-second round, authoritative results, and automatic requeue. Physical phone testing and final theme/rule changes remain pending.
+The integrated client was also checked against this repository's actual backend: six humans in one match, binary movement, action effects, reload seat recovery, a full 60-second round, authoritative results, and automatic requeue. Physical phone testing remains pending.

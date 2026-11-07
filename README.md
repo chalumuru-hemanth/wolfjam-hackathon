@@ -1,6 +1,10 @@
-# Wolfjam 2026
+# Nightlight
 
-A browser arena game for 2 to 6 players, with a server built like a live service. Colyseus 0.18, TypeScript, SQLite.
+**To score, you must be seen.** A multiplayer game of light and dark for 2 to 6 players, built for Wolfjam 2026 on the theme of Visibility.
+
+The arena is dark. A moving beacon pays points but lights you up for everyone. Hidden players can creep close and flash you to steal your score, but flashing gives them away too. The server never sends a position you are not allowed to see, so the dark cannot be hacked.
+
+Move with WASD or the left stick. Flash with Space or the right button.
 
 ## Run it
 
@@ -21,17 +25,13 @@ Open `/debug` in a few tabs to play each other, or in one tab to play bots.
 
 The Phaser 4.1.0 client lives in [client/](client/README.md). The production Docker image builds it automatically. For local client development, run `npm run dev:client` in a second terminal. Set `VITE_COLYSEUS_URL=http://localhost:2567` in `client/.env.local` to connect Vite to the server; without it the development client runs solo practice. For phones, use the laptop's LAN address in that endpoint and open Vite's Network URL. Production connects to the server's own origin without an override.
 
-## Add the theme
+## Tune the game
 
-| To change | Edit |
-|---|---|
-| Game name and theme label | `GAME_IDENTITY` in `shared/src/config.ts` |
-| **The verb** | `resolveAction` in `shared/src/sim.ts` |
-| When bots use the verb | `action` in `server/src/bots/brain.ts` |
-| Any tuning number | `shared/src/config.ts` |
-| New data for clients | `shared/src/schema.ts`, set in `syncViews` in `server/src/rooms/ArenaRoom.ts` |
+Every rule number is in `shared/src/config.ts`, and both server and client read from it. The rules are in `shared/src/sim.ts`. To check that a change has not broken the balance:
 
-Then update the verb tests in `shared/src/sim.test.ts`, the fields in `docs/CONTRACT.md`, and the input if the verb needs more than one button.
+```bash
+npx tsx scripts/balance.ts 1000 4
+```
 
 ## Check it
 
@@ -59,6 +59,7 @@ Use a current Node 22 or newer. Node 22.13 on Windows segfaulted when starting t
 
 ## Docs
 
+- [Game design](docs/DESIGN.md), including the research and tuning
 - [Client contract](docs/CONTRACT.md), for the Phaser client
 - [Architecture](docs/ARCHITECTURE.md), for judges
 - [Deploying to Railway](docs/DEPLOY.md)

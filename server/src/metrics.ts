@@ -45,6 +45,8 @@ export interface MetricsSnapshot {
   tick: { p50Ms: number; p95Ms: number; budgetMs: number; overruns: number; total: number };
   eventLoop: { p50Ms: number; p95Ms: number };
   rounds: { completed: number; dbWriteP95Ms: number; roomErrors: number };
+  /** Share of enemy positions the server refused to send, over the last interval. */
+  visibility: { withheldPercent: number; withheldPositions: number };
   memoryMb: number;
   swarm: { running: boolean; target: number; connected: number };
 }
@@ -60,6 +62,9 @@ class Metrics {
   private overruns = 0;
   private roundsCompleted = 0;
   private roomErrors = 0;
+  private withheld = 0;
+  private pairs = 0;
+  private withheldTotal = 0;
   private latest: MetricsSnapshot | undefined;
   private queueDepth: () => number = () => 0;
   private swarmStatus: () => MetricsSnapshot["swarm"] = () => ({
@@ -85,6 +90,12 @@ class Metrics {
   recordRound(dbWriteMs: number): void {
     this.roundsCompleted++;
     this.dbWrites.record(dbWriteMs);
+  }
+
+  recordVisibility(withheld: number, pairs: number): void {
+    this.withheld += withheld;
+    this.pairs += pairs;
+    this.withheldTotal += withheld;
   }
 
   recordRoomError(): void {
@@ -135,6 +146,9 @@ class Metrics {
     const loopP50 = this.loop.percentile(50) / 1e6;
     const loopP95 = this.loop.percentile(95) / 1e6;
     this.loop.reset();
+    const withheldPercent = this.pairs > 0 ? (this.withheld / this.pairs) * 100 : 0;
+    this.withheld = 0;
+    this.pairs = 0;
 
     this.latest = {
       at: Date.now(),
@@ -157,6 +171,7 @@ class Metrics {
         dbWriteP95Ms: db.p95,
         roomErrors: this.roomErrors,
       },
+      visibility: { withheldPercent, withheldPositions: this.withheldTotal },
       memoryMb: Math.round(process.memoryUsage().rss / 1048576),
       swarm: this.swarmStatus(),
     };

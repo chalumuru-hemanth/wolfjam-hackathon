@@ -11,7 +11,7 @@ interface Window {
     remainingMs: number;
     player?: import('./game/types').PlayerSnapshot;
     inputEnabled: boolean;
-    playerCount: number;
+    playerCount: number; flashes: number; beacon?: { x: number; y: number };
     audioState: AudioContextState | 'locked';
     audioLoaded: number;
   };

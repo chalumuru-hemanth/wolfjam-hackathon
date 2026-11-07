@@ -1,11 +1,13 @@
 # Architecture
 
-A browser arena game for 2 to 6 players, with 60-second rounds, built like a small live service. The server owns all game state. Clients send input and render what they are told.
+Nightlight is a browser arena game for 2 to 6 players, with 60-second rounds, built like a small live service. The server owns all game state. Clients send input and render what they are told. The rules and reasoning are in [DESIGN.md](DESIGN.md).
+
+The theme is Visibility, and it is enforced by the network layer rather than by the art. **The server never sends a client the position of a player it cannot see.**
 
 ```mermaid
 flowchart LR
   P["Phones and browsers"] -- "input over WSS" --> A
-  A -- "state patches, 20 Hz" --> P
+  A -- "filtered state, 20 Hz" --> P
   P -- "joins queue" --> W["WaitRoom"]
   W --> M["Matchmaking loop, 4 Hz"]
   M -- "creates room, reserves seats" --> A["ArenaRoom, 30 Hz fixed tick"]
@@ -26,6 +28,18 @@ flowchart LR
 3. The loop creates a private `ArenaRoom`, reserves a seat per player, and sends each client its reservation.
 4. The room tops up timed-out groups with bots, then runs countdown, 60 seconds of play, and results.
 5. The results are written to SQLite in one transaction, and the room closes.
+
+## Visibility on the wire
+
+Most games with fog of war send every position to every client, then hide them with graphics. A modified client can simply read them, which is how map hacks work.
+
+Nightlight splits a player in two. `PlayerState` holds the handle and score, goes to everyone, and contains no position. `BodyState` holds the position. Each client has a Colyseus `StateView`, and every tick the server adds or removes bodies from that view using `canSee` from `shared/sim.ts`.
+
+A hidden player's position is never encoded for that client, so no client modification can reveal it. `scripts/abuse.ts` checks this over a real connection, and `/ops` shows the share of positions withheld live.
+
+Bots read the world through the same `canSee`, so they cannot see through the dark either.
+
+The rules also run on the client in practice mode. That is safe because practice has no server and no opponent to cheat against.
 
 ## Decisions worth explaining
 
@@ -53,17 +67,15 @@ flowchart LR
 
 ## Measured load
 
-Measured in the production Docker image on Linux and Node 22, on an 8-core machine with the swarm in the same container and no real network between clients and server. Run again on Railway before quoting these numbers, because hosted CPU allocation and real networks will differ.
+Measured in the production Docker image on Linux and Node 22, on an 8-core machine, with per-client filtering active. The swarm shared the container, and there was no real network between clients and server. Run again on Railway before quoting these numbers, because hosted CPU allocation and real networks will differ.
 
-| Clients | Rooms | Tick p95 | Event loop p95 | Ticks over budget | Memory |
-|---|---|---|---|---|---|
-| 25 swarm + 3 bots | 5 | 0.61 ms | 6.2 ms | 0 | 137 MB |
-| 150 swarm | 25 | 0.33 ms | 7.0 ms | 0 | 165 MB |
-| 300 swarm | 50 | 0.30 ms | 11.0 ms | 0 | 160 MB |
-| 600 swarm | 100 | 0.13 ms | 6.9 ms | 0 | 168 MB |
-| 1,200 swarm | 200 | 0.07 ms | 24.1 ms | 0 of 413,949 | 183 MB |
+| Clients | Rooms | Tick p95 | Event loop p95 | Positions withheld | Ticks over budget | Memory |
+|---|---|---|---|---|---|---|
+| 150 swarm | 25 | 0.15 ms | 5.8 ms | 64% | 2 of 19,845 | 168 MB |
+| 600 swarm | 100 | 0.10 ms | 8.2 ms | 68% | 2 of 107,459 | 205 MB |
+| 1,200 swarm | 200 | 0.05 ms | 25.1 ms | 56% | 3 of 358,876 | 315 MB |
 
-The tick budget at 30 Hz is 33.3 ms. The 1,200 run was the highest tested, not a proven ceiling. The event loop delay starting to climb there is the first sign of pressure. Tick p95 falls at higher counts partly because rooms in the rolling window are at different phases, so read it alongside event loop delay.
+The tick budget at 30 Hz is 33.3 ms. The 1,200 run was the highest tested, not a proven ceiling, and event loop delay starting to climb there is the first sign of pressure. Over-budget counts are cumulative across the run. Tick p95 reads lower at higher counts because its 2,048-sample window covers less time as rooms increase, so read it alongside event loop delay.
 
 ## Hostile clients
 
@@ -71,6 +83,7 @@ The tick budget at 30 Hz is 33.3 ms. The 1,200 run was the highest tested, not a
 
 - Arenas only accept rooms and seats carrying a per-process key that clients never see.
 - Clients over 120 messages a second are disconnected.
+- Hidden positions are never sent, and the public roster carries no position.
 - Input values are clamped twice, and NaN or infinite values have no effect.
 - Queue joins write nothing to the database, so random ids cannot grow it.
 - Metrics are built once a second on a timer, so requests cannot trigger the work.
