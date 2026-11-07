@@ -1,0 +1,33 @@
+{
+  "name": "wolfjam-arena-client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "play": "node scripts/start-client.mjs",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "build:practice": "npm run typecheck && vite build --mode practice",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test": "node --experimental-strip-types --test tests/input.test.ts tests/join.test.ts tests/network.test.ts tests/practice.test.ts"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "0.18.9",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "@fontsource/dm-sans": "5.3.0",
+    "phaser": "4.1.0",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "24.10.0",
+    "@types/qrcode": "1.5.6",
+    "typescript": "5.9.3",
+    "vite": "8.3.6"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
