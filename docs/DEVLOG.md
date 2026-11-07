@@ -43,3 +43,10 @@ The important decision was enforcing the theme in the netcode. Hidden positions 
 
 - Walls and line of sight. Distance alone gives the same tension, and costs far less to build and to read on a phone.
 - Footstep sounds and other partial clues. They could be added if the dark feels too blind.
+
+## Seen by, and an idea the data rejected
+
+**Seen by** shows each player how many others can see them right now. Only the server knows this, and it sends each client its own number privately. It also fixed a quiet lie: the status could say hidden while someone nearby was watching.
+
+**Fame is light**, making a high score visible from further away, was meant to pair with it. It was built in full, then switched off. Across 1,000 simulated rounds it favoured leaders (58.5% vs 52.7% wins for light-holding bots) and thinned the dark, which was the opposite of its purpose. Our first 300-round runs had suggested it helped underdogs; at a larger sample that disappeared. It stays one config number away, for a human playtest to settle.
+

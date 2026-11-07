@@ -39,6 +39,8 @@ A hidden player's position is never encoded for that client, so no client modifi
 
 Bots read the world through the same `canSee`, so they cannot see through the dark either.
 
+The same filtering delivers a private fact. A third map, `selves`, holds each player's watcher count, and each client's view only ever contains its own entry. A client knows how many players can see it, and never learns that number for anyone else. `scripts/abuse.ts` checks both.
+
 The rules also run on the client in practice mode. That is safe because practice has no server and no opponent to cheat against.
 
 ## Decisions worth explaining

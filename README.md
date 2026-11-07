@@ -2,7 +2,7 @@
 
 **To score, you must be seen.** A multiplayer game of light and dark for 2 to 6 players, built for Wolfjam 2026 on the theme of Visibility.
 
-The arena is dark. A moving beacon pays points but lights you up for everyone. Hidden players can creep close and flash you to steal your score, but flashing gives them away too. The server never sends a position you are not allowed to see, so the dark cannot be hacked.
+The arena is dark. Your status always shows how many players can see you. A moving beacon pays points but lights you up for everyone. Hidden players can creep close and flash you to steal your score, but flashing gives them away too. The server never sends a position you are not allowed to see, so the dark cannot be hacked.
 
 Move with WASD or the left stick. Flash with Space or the right button.
 

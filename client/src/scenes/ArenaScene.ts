@@ -5,6 +5,7 @@ import { GAME, COLORS } from '../game/config';
 import type { GameSession, GameEvent, PlayerSnapshot } from '../game/types';
 import { interpolate } from '../network/interpolation';
 import { Juice, ensureLightTexture, LIGHT_TEXTURE } from '../effects/Juice';
+import { glowRadius } from '@wolfjam/shared/sim';
 import { AudioBus } from '../audio/AudioBus';
 
 interface PlayerView {
@@ -107,8 +108,11 @@ export class ArenaScene extends Phaser.Scene {
     this.selfLight.setVisible(Boolean(self));
     if (self) {
       this.cameraTarget.setPosition(self.shape.x, self.shape.y);
-      this.sight.setPosition(self.shape.x, self.shape.y);
-      this.selfLight.setPosition(self.shape.x, self.shape.y);
+      // With the glow on, the ring grows with your score: it shows how far away you can be seen.
+      const reach = glowRadius({ score: this.session.players.get(selfId ?? '')?.score ?? 0 });
+      this.sight.setPosition(self.shape.x, self.shape.y).setRadius(reach);
+      this.selfLight.setPosition(self.shape.x, self.shape.y).setDisplaySize(reach * 2.6, reach * 2.6);
+      this.sight.setStrokeStyle(1, this.session.watchers > 0 ? COLORS.coral : COLORS.cyan, this.session.watchers > 0 ? 0.6 : 0.22);
     }
     this.syncLight(time);
     this.cameras.main.setLerp(1 - Math.exp(-Math.min(delta, 50) / 90));

@@ -78,6 +78,7 @@ async function playFullRound(): Promise<void> {
   }, 33);
 
   check("input moves the player", await waitFor(() => (me()?.x ?? 0) !== startX, 2000));
+  check("the server reports who is watching you", typeof arena.state.selves?.get(arena.sessionId)?.watchers === "number");
   check("the action fires", await waitFor(() => fxCount > 0, 15000), `${fxCount} events`);
 
   const left = new Promise<void>((resolve) => arena.onLeave(() => resolve()));

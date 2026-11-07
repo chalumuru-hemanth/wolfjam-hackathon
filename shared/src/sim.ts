@@ -147,10 +147,28 @@ export function isExposed(world: World, player: SimPlayer): boolean {
   return world.lastLight || player.exposure > 0 || inBeacon(world, player);
 }
 
-/** The whole visibility rule. Clients are only ever sent what this allows. */
+/** How far away this player can be seen. It grows with the points they hold. */
+export function glowRadius(player: Pick<SimPlayer, "score">): number {
+  return LIGHT.sightRadius + Math.min(player.score * LIGHT.glowPerPoint, LIGHT.maxExtraGlow);
+}
+
+/**
+ * The whole visibility rule. Clients are only ever sent what this allows.
+ * Visibility belongs to the target: you are seen within your own glow, so a
+ * player with a big score can be watched by someone they cannot see.
+ */
 export function canSee(world: World, viewer: SimPlayer, target: SimPlayer): boolean {
   if (viewer.id === target.id || isExposed(world, target)) return true;
-  return Math.hypot(target.x - viewer.x, target.y - viewer.y) <= LIGHT.sightRadius;
+  return Math.hypot(target.x - viewer.x, target.y - viewer.y) <= glowRadius(target);
+}
+
+/** How many other players can see this one right now, bots included. */
+export function watchersOf(world: World, target: SimPlayer, lightsOn = false): number {
+  let watchers = 0;
+  for (const viewer of world.players) {
+    if (viewer.id !== target.id && (lightsOn || canSee(world, viewer, target))) watchers++;
+  }
+  return watchers;
 }
 
 /** The next beacon spot, but only once it has been announced. */

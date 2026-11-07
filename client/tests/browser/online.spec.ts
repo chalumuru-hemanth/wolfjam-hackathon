@@ -14,16 +14,15 @@ test('the built client plays a live match against the real server', async ({ pag
 
   await page.goto(url!);
   await page.getByRole('button', { name: 'Find match', exact: true }).click();
-  await expect(page.locator('#countdown-screen')).toBeVisible({ timeout: 15000 });
-  await page.screenshot({ path: info.outputPath('lights-on.png') });
-
-  await expect(page.locator('#visibility-chip')).toBeVisible({ timeout: 8000 });
+  // The countdown lasts 3 seconds, so a slow join can miss it. Wait for the round instead.
+  await expect(page.locator('#visibility-chip')).toBeVisible({ timeout: 25000 });
   await expect(page.locator('#visibility-label')).toHaveText('HIDDEN');
   await page.waitForTimeout(600);
   await page.screenshot({ path: info.outputPath('live-dark.png') });
 
   await page.keyboard.press('Space');
   await expect(page.locator('#visibility-label')).toHaveText('EXPOSED');
+  await expect(page.locator('#visibility-eyes')).toHaveText('3');
   await page.waitForTimeout(100);
   await page.screenshot({ path: info.outputPath('live-flash.png') });
 

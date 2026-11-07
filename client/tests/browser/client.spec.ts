@@ -54,6 +54,7 @@ test('full round, keyboard, scoring, audio unlock, results, and rematch', async 
   expect(await page.evaluate(() => window.__wolfjam?.().player?.score ?? 0)).toBeGreaterThan(0);
   await page.keyboard.press('Space');
   await expect(page.locator('#visibility-label')).toHaveText('EXPOSED');
+  await expect(page.locator('#visibility-eyes')).toHaveText('3');
   await page.screenshot({ path: info.outputPath('play.png') });
   await page.getByRole('button', { name: 'Join QR ↗', exact: true }).click();
   await expect(page.locator('#title-screen')).toBeVisible();

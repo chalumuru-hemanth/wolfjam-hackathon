@@ -36,6 +36,16 @@ export const BodyState = schema(
 );
 export type BodyState = SchemaType<typeof BodyState>;
 
+/** Facts only this player may know about themselves. */
+export const SelfState = schema(
+  {
+    /** How many other players can see you right now, bots included. */
+    watchers: t.uint8().default(0),
+  },
+  "SelfState",
+);
+export type SelfState = SchemaType<typeof SelfState>;
+
 export const ArenaState = schema(
   {
     phase: t.string(),
@@ -43,6 +53,8 @@ export const ArenaState = schema(
     players: t.map(PlayerState),
     /** Filtered per client. A hidden player simply has no entry here. */
     bodies: t.map(BodyState).view(),
+    /** Filtered per client. Each client only ever receives its own entry. */
+    selves: t.map(SelfState).view(),
     beaconX: t.int16(),
     beaconY: t.int16(),
     /** Equal to beaconX and beaconY until the next spot is announced. */

@@ -28,6 +28,7 @@ function steer(bot: SimPlayer, x: number, y: number, random: Random): { moveX: n
 export function decide(bot: SimPlayer, world: World, style: BotStyle, random: Random): PlayerInput {
   let target: SimPlayer | undefined;
   let nearest = Number.POSITIVE_INFINITY;
+  let prey: SimPlayer | undefined;
   for (const other of world.players) {
     if (other.id === bot.id || other.immune > 0 || !canSee(world, bot, other)) continue;
     const distance = Math.hypot(other.x - bot.x, other.y - bot.y);
@@ -35,6 +36,8 @@ export function decide(bot: SimPlayer, world: World, style: BotStyle, random: Ra
       nearest = distance;
       target = other;
     }
+    // Lurkers stalk whoever is worth the most, which a glowing leader makes easy.
+    if (!prey || other.score > prey.score) prey = other;
   }
 
   const goal = announcedSpot(world.beacon);
@@ -55,5 +58,6 @@ export function decide(bot: SimPlayer, world: World, style: BotStyle, random: Ra
     return { ...steer(bot, x, y, random), action };
   }
 
-  return { ...steer(bot, target.x, target.y, random), action };
+  const chase = prey ?? target;
+  return { ...steer(bot, chase.x, chase.y, random), action };
 }

@@ -8,6 +8,7 @@ import {
   decide,
   IDLE_INPUT,
   inBeacon,
+  isExposed,
   NET,
   ROUND,
   seededRandom,
@@ -44,6 +45,9 @@ const tally = {
   allPairs: 0,
   darkHidden: 0,
   darkPairs: 0,
+  /** Player-ticks spent hidden while someone they cannot see is watching them. */
+  stalked: 0,
+  hiddenTicks: 0,
   litTicks: 0,
   playerTicks: 0,
   leadChanges: 0,
@@ -83,6 +87,11 @@ for (let round = 0; round < rounds; round++) {
     for (const viewer of world.players) {
       tally.playerTicks++;
       if (inBeacon(world, viewer)) tally.litTicks++;
+      if (!world.lastLight && !isExposed(world, viewer)) {
+        tally.hiddenTicks++;
+        const stalked = world.players.some((other) => other !== viewer && canSee(world, other, viewer) && !canSee(world, viewer, other));
+        if (stalked) tally.stalked++;
+      }
       for (const target of world.players) {
         if (viewer === target) continue;
         const hidden = !canSee(world, viewer, target);
@@ -126,6 +135,7 @@ console.log(`Wins by seat      ${tally.winsBySeat.map((wins) => percent(wins, ro
 console.log(`Flashes per round ${perRound(tally.flashes)}, hit rate ${percent(tally.hits, tally.flashes)}`);
 console.log(`Top score         ${perRound(tally.topScore)} avg, mean player ${(tally.scoreTotal / rounds / seats).toFixed(1)}`);
 console.log(`Positions hidden  ${percent(tally.hiddenPairs, tally.allPairs)} overall, ${percent(tally.darkHidden, tally.darkPairs)} before Last Light`);
+console.log(`Watched unseen    ${percent(tally.stalked, tally.hiddenTicks)} of hidden time, someone you cannot see is watching you`);
 console.log(`Time in the light ${percent(tally.litTicks, tally.playerTicks)}`);
 console.log(`Lead changes      ${perRound(tally.leadChanges)} per round`);
 console.log(`Comebacks         ${percent(tally.decidedInLastLight, rounds)} of rounds change hands in Last Light`);

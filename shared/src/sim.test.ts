@@ -7,12 +7,14 @@ import {
   canSee,
   createPlayer,
   createWorld,
+  glowRadius,
   IDLE_INPUT,
   inBeacon,
   isExposed,
   seededRandom,
   spawnPoint,
   stepWorld,
+  watchersOf,
   type SimPlayer,
   type World,
 } from "./sim.ts";
@@ -61,7 +63,7 @@ test("players cannot leave the arena", () => {
 
 test("in the dark, a distant player is invisible", () => {
   const a = createPlayer("a", 800, 450);
-  const b = createPlayer("b", 1200, 450);
+  const b = createPlayer("b", 1300, 450);
   const world = worldWith(a, b);
   assert.equal(canSee(world, a, b), false);
   assert.equal(canSee(world, b, a), false);
@@ -73,6 +75,52 @@ test("sight is mutual at close range", () => {
   const world = worldWith(a, b);
   assert.equal(canSee(world, a, b), true);
   assert.equal(canSee(world, b, a), true);
+});
+
+test("a player with no points glows only as far as normal sight", () => {
+  assert.equal(glowRadius(createPlayer("a", 0, 0)), LIGHT.sightRadius);
+});
+
+const glowOff = LIGHT.glowPerPoint === 0 ? "glow is switched off in config" : false;
+
+test("fame is light: points make you visible from further away, up to a cap", { skip: glowOff }, () => {
+  const p = createPlayer("a", 0, 0);
+  p.score = 20;
+  assert.equal(glowRadius(p), LIGHT.sightRadius + 20 * LIGHT.glowPerPoint);
+  p.score = 10_000;
+  assert.equal(glowRadius(p), LIGHT.sightRadius + LIGHT.maxExtraGlow);
+});
+
+test("a glowing leader can be watched by a hunter it cannot see", { skip: glowOff }, () => {
+  const leader = createPlayer("leader", 800, 450);
+  const hunter = createPlayer("hunter", 800 + LIGHT.sightRadius + 60, 450);
+  leader.score = 40;
+  const world = worldWith(leader, hunter);
+  assert.equal(canSee(world, hunter, leader), true);
+  assert.equal(canSee(world, leader, hunter), false);
+});
+
+test("watchers counts everyone who can see you, and nobody else", () => {
+  const leader = createPlayer("leader", 800, 450);
+  const close = createPlayer("close", 900, 450);
+  // Outside normal sight, but inside a full glow, whatever the tuning is.
+  const reach = LIGHT.sightRadius + LIGHT.maxExtraGlow;
+  const far = createPlayer("far", 800 + Math.max(LIGHT.sightRadius + 40, reach - 20), 450);
+  const world = worldWith(leader, close, far);
+  assert.equal(watchersOf(world, leader), 1);
+  if (!glowOff) {
+    leader.score = 1000;
+    assert.equal(watchersOf(world, leader), 2, "a full glow reaches across this arena");
+  }
+  assert.equal(watchersOf(world, far), 0);
+  assert.equal(watchersOf(world, far, true), 2, "when the lights are on, everyone watches");
+});
+
+test("an exposed player is watched by everyone", () => {
+  const lit = createPlayer("lit", 200, 200);
+  const a = createPlayer("a", 1500, 800);
+  const b = createPlayer("b", 1400, 100);
+  assert.equal(watchersOf(worldWith(lit, a, b), lit), 2);
 });
 
 test("you can always see yourself", () => {

@@ -26,10 +26,12 @@ import {
   NET,
   PlayerState,
   PLAYER_KINDS,
+  SelfState,
   ROUND,
   seededRandom,
   spawnPoint,
   stepWorld,
+  watchersOf,
   type ArenaJoinOptions,
   type BotStyle,
   type Phase,
@@ -125,6 +127,10 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
   override onJoin(client: Client, options: ArenaJoinOptions): void {
     client.view = new StateView();
     client.view.add(this.state.bodies);
+    client.view.add(this.state.selves);
+    const self = new SelfState();
+    this.state.selves.set(client.sessionId, self);
+    client.view.add(self);
 
     this.addPlayer(client.sessionId, options.playerId, options.handle, parseKind(options.kind));
     if (this.state.phase === "waiting") {
@@ -174,6 +180,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
     if (!this.slots.delete(id)) return;
     this.state.players.delete(id);
     this.state.bodies.delete(id);
+    this.state.selves.delete(id);
     this.world.players = this.world.players.filter((player) => player.id !== id);
   }
 
@@ -330,6 +337,11 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
           if (!visible) withheld++;
         }
       }
+
+      // Bots count as watchers too: they are hunting by the same rule.
+      const self = this.state.selves.get(client.sessionId);
+      const watchers = watchersOf(this.world, viewer.sim, lightsOn);
+      if (self && self.watchers !== watchers) self.watchers = watchers;
     }
     metrics.recordVisibility(withheld, pairs);
   }

@@ -27,6 +27,7 @@ export class GameUi {
   private rosterKey = '';
   private resultsKey = '';
   private playedWin = '';
+  private lastWatchers = 0;
 
   constructor(session: GameSession, audio: AudioBus, configError: string) {
     this.session = session; this.audio = audio; this.configError = configError;
@@ -70,6 +71,7 @@ export class GameUi {
       'A solo match fills with bots after 5 seconds. Six players start immediately.' : 'Your round starts automatically.');
     this.text('hud-score', String(self?.score ?? 0));
     this.renderVisibility(phase === 'playing' ? self?.exposed === true : undefined);
+    this.pulseWhenSpotted(phase === 'playing' ? session.watchers : 0);
     const seconds = Math.ceil(session.remainingMs / 1000);
     this.text('hud-timer', phase === 'lobby' ? '60' : String(seconds).padStart(2, '0'));
     element('hud-timer').classList.toggle('urgent', phase === 'playing' && seconds <= 10);
@@ -87,12 +89,26 @@ export class GameUi {
   private renderVisibility(exposed: boolean | undefined): void {
     const chip = element('visibility-chip');
     chip.hidden = exposed === undefined || this.titleVisible;
-    this.text('visibility-label', this.session.lastLight ? 'LAST LIGHT' : exposed ? 'EXPOSED' : 'HIDDEN');
-    chip.dataset.state = this.session.lastLight ? 'last' : exposed ? 'exposed' : 'hidden';
+    const watchers = this.session.watchers;
+    const state = this.session.lastLight ? 'last' : exposed ? 'exposed' : watchers > 0 ? 'watched' : 'hidden';
+    const label = { last: 'LAST LIGHT', exposed: 'EXPOSED', watched: 'SEEN', hidden: 'HIDDEN' }[state];
+    this.text('visibility-label', label);
+    this.text('visibility-eyes', watchers > 0 ? String(watchers) : '');
+    element('visibility-eyes').hidden = watchers === 0;
+    chip.dataset.state = state;
+    chip.setAttribute('aria-label', watchers > 0 ? `${label}. ${watchers} ${watchers === 1 ? 'player can' : 'players can'} see you.` : label);
     const leader = [...this.session.players.values()].sort((a, b) => b.score - a.score)[0];
     const self = this.session.players.get(this.session.status.sessionId ?? '');
     const leading = leader !== undefined && leader === self;
     this.text('hud-leader', leader && leader.score > 0 ? `${leading ? 'YOU' : leader.handle ?? 'LEADER'} ${leader.score}` : '–');
+  }
+
+  /** A short buzz on phones the moment someone starts watching you. */
+  private pulseWhenSpotted(watchers: number): void {
+    if (watchers > this.lastWatchers && this.lastWatchers === 0 && typeof navigator.vibrate === 'function') {
+      try { navigator.vibrate(30); } catch { /* Some browsers block vibration. That is fine. */ }
+    }
+    this.lastWatchers = watchers;
   }
 
   private text(id: string, value: string): void { const node = element(id); if (node.textContent !== value) node.textContent = value; }

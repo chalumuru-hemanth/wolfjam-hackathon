@@ -23,6 +23,7 @@ The round lasts 60 seconds, and the most points wins.
 | **The cost** | Flashing lights you up for everyone for 1.2 seconds, hit or miss, with a 3.2 second cooldown |
 | **Being tagged** | You are stunned, shoved, and shielded from further tags for 1.8 seconds |
 | **Last Light** | In the final 10 seconds, everyone is revealed and the beacon pays 1.5x |
+| **Seen by** | Your status always shows how many players can see you right now, bots included |
 
 ## Why it fits the theme
 
@@ -33,6 +34,30 @@ Visibility is the score, the risk and the weapon at once. A theme can easily end
 - **Every action costs visibility.** A player is always choosing how much of themselves to reveal.
 
 The `HIDDEN` and `EXPOSED` label on screen is the most important readout in the game, because that is the state you are playing.
+
+## Seen by: making visibility itself visible
+
+Most games hide enemies by drawing them in the dark while still sending their positions. Nightlight's server is the only thing that knows who can see whom, so it can tell each player something no client could work out alone: exactly how many players can see you right now.
+
+The status label shows this as `HIDDEN`, `SEEN 👁 2`, `EXPOSED 👁 3` or `LAST LIGHT`. Your sight ring turns coral while anyone is watching, and phones give a short buzz when the first person spots you. The count is private. Each client receives only its own, through the same per-client filtering that hides positions.
+
+Before this, the label could say `HIDDEN` while a nearby player was looking right at you. Now it reports the truth.
+
+## Fame is light: built, tested, and switched off
+
+The idea was to make your score your light: the more points you hold, the further away you can be seen. Sight would no longer be mutual, so the watcher count could warn a leader about hunters they cannot see. The aim was a catch-up mechanic built from the theme itself.
+
+It is fully built and tested, but **it ships switched off**, because simulation says it makes the game worse:
+
+| 1,000 rounds, 4 players | No glow | Glow of 2 per point |
+|---|---|---|
+| Holder vs lurker wins | **52.7% / 47.3%** | 58.5% / 41.5% |
+| Positions hidden before Last Light | **49.1%** | 44.6% |
+| Hidden time watched by someone you cannot see | 0% | 2.7% |
+
+It helped leaders instead of hunters. It also rarely produced the unseen watching that would make the count interesting, and stronger glows only got that to 9% by flooding the dark. Small runs of 300 rounds had suggested the opposite; that was noise.
+
+A version where moving makes you visible and standing still hides you showed the same near-zero result. The simulator's bots never stand still, though, so this idea can only be judged by people. To try either at a playtest, set `LIGHT.glowPerPoint` to 2 in `shared/src/config.ts`.
 
 ## Decisions from research
 

@@ -25,6 +25,8 @@ export interface GameSession {
   readonly players: ReadonlyMap<string, PlayerSnapshot>;
   readonly beacon: BeaconSnapshot | undefined;
   readonly lastLight: boolean;
+  /** How many other players can see you right now. Only the server knows this online. */
+  readonly watchers: number;
   readonly round: RoundSnapshot;
   readonly remainingMs: number;
   readonly cooldownMs: number;

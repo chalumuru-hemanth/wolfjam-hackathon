@@ -38,6 +38,13 @@ export function readPlayers(state: unknown): Map<string, PlayerSnapshot> {
   return players;
 }
 
+/** Your own watcher count. The server sends each client only its own entry. */
+export function readWatchers(state: unknown, sessionId: string): number {
+  if (!record(state)) return 0;
+  const self = bodyLookup(state.selves)?.get(sessionId);
+  return record(self) && finite(self.watchers) ? self.watchers : 0;
+}
+
 export function readBeacon(state: unknown): { beacon: BeaconSnapshot | undefined; lastLight: boolean } {
   if (!record(state) || !finite(state.beaconX) || !finite(state.beaconY)) return { beacon: undefined, lastLight: false };
   const nextX = finite(state.beaconNextX) ? state.beaconNextX : state.beaconX;

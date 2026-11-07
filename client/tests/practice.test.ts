@@ -148,6 +148,18 @@ test('rematch resets points, positions, readiness, cooldown, and round identity'
   assert.equal(session.cooldownMs, 0);
 });
 
+test('nobody watches you in the dark at the start, and everyone does in the light', async () => {
+  const now = { value: 0 };
+  const session = playing(now);
+  await session.join();
+  assert.equal(session.watchers, 3, 'before the round the lights are on');
+  session.ready(true);
+  now.value = 3000; session.update(STOP, 40);
+  assert.equal(session.watchers, 0);
+  session.update({ ...STOP, actionPressed: true }, 34);
+  assert.equal(session.watchers, 3, 'a flash exposes you to everyone');
+});
+
 test('standings sort scores and preserve ties deterministically', () => {
   const players = new Map([
     ['b', { x: 0, y: 0, score: 5, ready: false, visible: true }],

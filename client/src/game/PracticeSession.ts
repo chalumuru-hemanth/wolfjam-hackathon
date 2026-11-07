@@ -1,6 +1,6 @@
 import { BOTS, NET } from '@wolfjam/shared/config';
 import { botStyle, decide } from '@wolfjam/shared/brain';
-import { announcedSpot, applyInput, canSee, createPlayer, createWorld, IDLE_INPUT, isExposed, spawnPoint, stepWorld } from '@wolfjam/shared/sim';
+import { announcedSpot, applyInput, canSee, createPlayer, createWorld, IDLE_INPUT, isExposed, spawnPoint, stepWorld, watchersOf } from '@wolfjam/shared/sim';
 import type { PlayerInput, SimPlayer, World } from '@wolfjam/shared/sim';
 import type { InputFrame } from '../input/InputState.ts';
 import type { ConnectionStatus } from '../network/NetworkSession.ts';
@@ -20,6 +20,7 @@ export class PracticeSession implements GameSession {
   readonly players = new Map<string, PlayerSnapshot>();
   beacon: BeaconSnapshot | undefined;
   lastLight = false;
+  watchers = 0;
   round: RoundSnapshot = { phase: 'lobby', roundId: '1' };
   private currentStatus: ConnectionStatus = { phase: 'idle', message: '', count: 0 };
   private readonly listeners = new Set<(status: ConnectionStatus) => void>();
@@ -80,7 +81,7 @@ export class PracticeSession implements GameSession {
 
   stopInput(): void { this.pendingAction = false; }
   disconnect(): void {
-    this.players.clear(); this.world = undefined; this.beacon = undefined; this.lastLight = false;
+    this.players.clear(); this.world = undefined; this.beacon = undefined; this.lastLight = false; this.watchers = 0;
     this.round = { phase: 'lobby', roundId: String(this.roundNumber) };
     this.publish({ phase: 'idle', message: '', count: 0 });
   }
@@ -136,6 +137,7 @@ export class PracticeSession implements GameSession {
     this.beacon = { x: world.beacon.x, y: world.beacon.y, nextX: next.x, nextY: next.y, movesIn: Math.ceil(world.beacon.timer),
       warning: next.x !== world.beacon.x || next.y !== world.beacon.y };
     this.lastLight = world.lastLight;
+    this.watchers = self ? watchersOf(world, self, lightsOn) : 0;
   }
 
   private emit(event: GameEvent): void { this.events.forEach((callback) => callback(event)); }

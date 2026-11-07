@@ -3,7 +3,7 @@ import test from 'node:test';
 import { NetworkSession } from '../src/network/NetworkSession.ts';
 import type { Every, RoomConnection } from '../src/network/NetworkSession.ts';
 import type { WireInput } from '../src/network/contract.ts';
-import { INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRoundResult } from '../src/network/contract.ts';
+import { INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRoundResult, readWatchers } from '../src/network/contract.ts';
 import { readNetworkConfig } from '../src/network/config.ts';
 import { interpolate } from '../src/network/interpolation.ts';
 import { createPlayerId, getStoredPlayerId, saveToken, storedToken } from '../src/network/identity.ts';
@@ -267,6 +267,24 @@ test('the flash cooldown counts down from the moment the server reports it', asy
   assert.equal(network.cooldownMs, GAME.actionCooldownMs);
   now += 1000;
   assert.equal(network.cooldownMs, GAME.actionCooldownMs - 1000);
+});
+
+test('the watcher count is read from this client\'s own private entry only', () => {
+  const state = { selves: new Map([['self', { watchers: 2 }]]) };
+  assert.equal(readWatchers(state, 'self'), 2);
+  assert.equal(readWatchers(state, 'someone-else'), 0);
+  assert.equal(readWatchers({}, 'self'), 0);
+  assert.equal(readWatchers({ selves: new Map([['self', { watchers: Number.NaN }]]) }, 'self'), 0);
+});
+
+test('session exposes the watcher count and clears it when leaving', async () => {
+  const room = new FakeRoom(); const timer = new ManualTimer();
+  const network = new NetworkSession(async () => room, config, 30000, timer.every);
+  await network.join();
+  room.patch({ ...state(), selves: new Map([['self', { watchers: 3 }]]) });
+  assert.equal(network.watchers, 3);
+  network.destroy();
+  assert.equal(network.watchers, 0);
 });
 
 test('contract rejects malformed actors/fx/results', () => {

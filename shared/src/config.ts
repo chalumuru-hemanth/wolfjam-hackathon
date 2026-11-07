@@ -56,6 +56,17 @@ export const LIGHT = {
   hitExposedSeconds: 0.4,
   /** The final stretch of a round, when every player is revealed. */
   lastLightSeconds: 10,
+  /**
+   * Fame is light: every point you hold makes you visible from further away,
+   * so a leader can be watched by players it cannot see.
+   *
+   * Off by default. In 1,000 simulated rounds, a glow of 2 per point helped
+   * holders (58.5% wins, up from 52.7%) and cut hidden positions from 49% to 45%.
+   * Bots cannot test whether humans enjoy it, so turn it on for a playtest with 2.
+   */
+  glowPerPoint: 0,
+  /** The furthest a glow can reach beyond normal sight. */
+  maxExtraGlow: 200,
 } as const;
 
 /** The light that pays points and gives you away. */

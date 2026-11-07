@@ -100,6 +100,10 @@ async function checkHiddenPlayersNeverArrive(): Promise<void> {
   check("the dark hides players from a client", sawHidden);
   check("hidden players stay on the public roster", sawRoster);
   check("the public roster carries no position", !leak);
+
+  const selves = a.state.selves;
+  check("a client knows how many players are watching it", typeof selves?.get(a.sessionId)?.watchers === "number");
+  check("a client never learns how many are watching anyone else", selves?.size === 1 && !selves.has(b.sessionId));
   await a.leave().catch(() => undefined);
   await b.leave().catch(() => undefined);
 }

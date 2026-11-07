@@ -97,6 +97,8 @@ Each entry in `bodies`:
 | `exposed` | boolean | Lit up for the whole arena right now |
 | `shielded` | boolean | Recently tagged, and cannot be tagged again yet |
 
+`room.state.selves.get(room.sessionId).watchers` is how many players can see you right now. `selves` only ever contains your own entry.
+
 `room.state.bodies.get(id)` being undefined is not an error. It means that player is in the dark. The server sends no position at all, so there is nothing for the client to reveal. Bodies appear and disappear constantly during play, and everyone is present before and after the round.
 
 ## Messages

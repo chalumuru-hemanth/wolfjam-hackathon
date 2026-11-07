@@ -171,6 +171,9 @@ h2 { font-size: 25px; letter-spacing: -1px; margin: 23px 0 8px; }
 #visibility-chip { pointer-events: none; position: absolute; z-index: 4; top: calc(66px + env(safe-area-inset-top, 0px)); left: 16px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: #05070dcc; border: 1px solid #2a3648; font: 800 16px/1 'Barlow Condensed', Impact, sans-serif; letter-spacing: 1.4px; color: #a7b5c7; transition: color 120ms, border-color 120ms; }
 #visibility-chip i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
 #visibility-chip[data-state="exposed"] { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 22px #ffc85755; }
+#visibility-chip[data-state="watched"] { color: var(--coral); border-color: #ff746c99; }
+#visibility-chip .eyes { display: inline-flex; align-items: center; gap: 4px; padding-left: 8px; margin-left: 2px; border-left: 1px solid currentColor; }
+#visibility-chip .eyes::before { content: ''; width: 14px; height: 9px; border: 2px solid currentColor; border-radius: 50%; box-sizing: border-box; background: radial-gradient(circle, currentColor 0 2px, transparent 2.5px); }
 #visibility-chip[data-state="last"] { color: var(--coral); border-color: var(--coral); box-shadow: 0 0 22px #ff746c55; }
 #hud-leader { color: var(--gold); font-size: 20px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) {

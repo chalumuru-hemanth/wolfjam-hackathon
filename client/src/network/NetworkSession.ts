@@ -1,6 +1,6 @@
 import type { InputFrame } from '../input/InputState.ts';
 import type { NetworkConfig } from './config.ts';
-import { encodeInput, INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRound, readRoundResult } from './contract.ts';
+import { encodeInput, INPUT_INTERVAL_MS, readBeacon, readFx, readPlayers, readRound, readRoundResult, readWatchers } from './contract.ts';
 import type { WireInput } from './contract.ts';
 import type { BeaconSnapshot, GameEvent, GameSession, PlayerSnapshot, RoundResult, RoundSnapshot } from '../game/types.ts';
 import { GAME } from '../game/config.ts';
@@ -34,6 +34,7 @@ export class NetworkSession implements GameSession {
   readonly players = new Map<string, PlayerSnapshot>();
   beacon: BeaconSnapshot | undefined;
   lastLight = false;
+  watchers = 0;
   round: RoundSnapshot = { phase: 'lobby', roundId: '0' };
   roundResult: RoundResult | undefined;
   private room: RoomConnection | undefined;
@@ -113,6 +114,7 @@ export class NetworkSession implements GameSession {
           this.players.clear(); snapshot.forEach((player, id) => this.players.set(id, player));
           const light = readBeacon(state);
           this.beacon = light.beacon; this.lastLight = light.lastLight;
+          this.watchers = readWatchers(state, room.sessionId);
           if (!snapshot.has(room.sessionId)) {
             if (this.connected && this.round.phase !== 'results') this.fail('Your player left the arena. Find a new match.');
             return;
@@ -195,7 +197,7 @@ export class NetworkSession implements GameSession {
     this.abort?.abort(); this.abort = undefined;
     this.unsubscribers.forEach((unsubscribe) => unsubscribe()); this.unsubscribers = [];
     const room = this.room; this.room = undefined;
-    this.players.clear(); this.beacon = undefined; this.lastLight = false; this.roundResult = undefined;
+    this.players.clear(); this.beacon = undefined; this.lastLight = false; this.watchers = 0; this.roundResult = undefined;
     this.round = { phase: 'lobby', roundId: '0' }; this.serverRemaining = -1; this.roundDeadline = 0;
     if (room) void room.leave().catch(() => {});
   }
