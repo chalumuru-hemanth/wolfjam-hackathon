@@ -1,5 +1,7 @@
 # Client mapping of the supplied Sylesh contract
 
+The expanded friends flow is documented in the repository's docs/CONTRACT.md: a persistent party room owns the invite code, host controls, and protected arena reservations. Quick matchmaking remains separate. Solo practice is always selectable and runs entirely on the device after loading.
+
 Source: the supplied README.md and CONTRACT.md, cross-checked with this repository's shared/src/protocol.ts and shared/src/schema.ts.
 
 ## Connection and deployment

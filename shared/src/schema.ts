@@ -71,6 +71,11 @@ export type ArenaState = SchemaType<typeof ArenaState>;
 export const WaitState = schema({ waiting: t.uint16() }, "WaitState");
 export type WaitState = SchemaType<typeof WaitState>;
 
+export const PartyMember = schema({ handle: t.string(), connected: t.boolean() }, 'PartyMember');
+export type PartyMember = SchemaType<typeof PartyMember>;
+export const PartyState = schema({ code: t.string(), hostId: t.string(), phase: t.string(), members: t.map(PartyMember) }, 'PartyState');
+export type PartyState = SchemaType<typeof PartyState>;
+
 /** One client input frame. Must stay flat: primitives only. */
 export const InputFrame = schema(
   {

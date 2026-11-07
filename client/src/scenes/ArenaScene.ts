@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { InputState } from '../input/InputState';
+import type { InputFrame } from '../input/InputState';
 import { readLayout } from '../layout';
 import { GAME, COLORS } from '../game/config';
 import type { GameSession, GameEvent, PlayerSnapshot } from '../game/types';
 import { interpolate } from '../network/interpolation';
 import { Juice, ensureLightTexture, LIGHT_TEXTURE } from '../effects/Juice';
 import { glowRadius } from '@wolfjam/shared/sim';
+import { BEACON } from '@wolfjam/shared/config';
 import { AudioBus } from '../audio/AudioBus';
 
 interface PlayerView {
@@ -34,11 +36,14 @@ export class ArenaScene extends Phaser.Scene {
   private selfLight!: Phaser.GameObjects.Image;
   private beaconGlow!: Phaser.GameObjects.Image;
   private beaconRing!: Phaser.GameObjects.Arc;
+  private beaconLabel!: Phaser.GameObjects.Text;
   private nextRing!: Phaser.GameObjects.Arc;
   private lastLightWash!: Phaser.GameObjects.Rectangle;
   private arrow!: Phaser.GameObjects.Triangle;
   private juice!: Juice;
   private unsubscribe: (() => void) | undefined;
+  private sampledInput: InputFrame = { moveX: 0, moveY: 0, actionHeld: false, actionPressed: false };
+  get currentInput(): Readonly<InputFrame> { return this.sampledInput; }
 
   constructor(controls: InputState, session: GameSession, audio: AudioBus) {
     super('arena'); this.controls = controls; this.session = session; this.audio = audio;
@@ -59,6 +64,7 @@ export class ArenaScene extends Phaser.Scene {
     this.beaconGlow = this.add.image(0, 0, LIGHT_TEXTURE).setTint(COLORS.gold).setBlendMode(Phaser.BlendModes.ADD)
       .setDisplaySize(GAME.beaconRadius * 3.1, GAME.beaconRadius * 3.1).setDepth(2).setVisible(false);
     this.beaconRing = this.add.circle(0, 0, GAME.beaconRadius).setStrokeStyle(2, COLORS.gold, 0.8).setDepth(2).setVisible(false);
+    this.beaconLabel = this.add.text(0, 0, 'THE SPOTLIGHT', { fontFamily: 'Barlow Condensed, sans-serif', fontSize: '19px', fontStyle: 'bold', color: '#FFC857', stroke: '#101827', strokeThickness: 4 }).setOrigin(.5).setDepth(3).setVisible(false);
     this.nextRing = this.add.circle(0, 0, GAME.beaconRadius).setStrokeStyle(2, COLORS.gold, 0.55).setDepth(2).setVisible(false);
     this.lastLightWash = this.add.rectangle(width / 2, height / 2, width, height, COLORS.gold, 0.1)
       .setBlendMode(Phaser.BlendModes.ADD).setDepth(1).setVisible(false);
@@ -87,7 +93,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    const input = this.controls.sample();
+    const input = this.sampledInput = this.controls.sample();
     if (input.actionPressed && this.controls.active) this.game.events.emit('action-feedback');
     this.session.update(input, delta);
     const paused = this.juice.step(delta);
@@ -154,8 +160,10 @@ export class ArenaScene extends Phaser.Scene {
     const shadow = this.add.ellipse(0, 9, 62, 52, 0x000000, 0.35);
     const shield = this.add.circle(0, 0, 37).setStrokeStyle(2, COLORS.white, 0.7).setVisible(false);
     const body = this.add.circle(0, 0, GAME.arena.radius, color);
-    const direction = this.add.triangle(6, 0, 0, 0, 9, 5, 0, 10, COLORS.navy).setOrigin(0.5);
-    const shape = this.add.container(0, 0, [glow, shadow, shield, body, direction]).setDepth(5).setVisible(false);
+    const eye = this.add.ellipse(0, 0, 35, 23, COLORS.white);
+    const pupil = this.add.circle(6, 0, 9, COLORS.navy);
+    const glint = this.add.circle(9, -3, 3, COLORS.white);
+    const shape = this.add.container(0, 0, [glow, shadow, shield, body, eye, pupil, glint]).setDepth(5).setVisible(false);
     const label = this.add.text(0, 0, self ? 'YOU' : id.slice(0, 4).toUpperCase(), {
       fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: self ? '#36D6D0' : '#F4F7FC',
       backgroundColor: '#05070D', padding: { x: 4, y: 2 },
@@ -168,6 +176,7 @@ export class ArenaScene extends Phaser.Scene {
     const shown = beacon !== undefined;
     this.beaconGlow.setVisible(shown);
     this.beaconRing.setVisible(shown);
+    this.beaconLabel.setVisible(shown);
     this.lastLightWash.setVisible(this.session.lastLight);
     if (!beacon) { this.nextRing.setVisible(false); this.arrow.setVisible(false); return; }
 
@@ -175,6 +184,8 @@ export class ArenaScene extends Phaser.Scene {
     const size = GAME.beaconRadius * 3.1 * pulse;
     this.beaconGlow.setPosition(beacon.x, beacon.y).setDisplaySize(size, size);
     this.beaconRing.setPosition(beacon.x, beacon.y);
+    this.beaconLabel.setPosition(beacon.x, beacon.y - GAME.beaconRadius - 18).setText(this.session.lastLight ?
+      'LAST LIGHT · ' + BEACON.lastLightMultiplier + '× POINTS' : 'THE SPOTLIGHT · +' + BEACON.pointsPerSecond + ' / SEC');
     this.nextRing.setPosition(beacon.nextX, beacon.nextY).setVisible(beacon.warning)
       .setScale(1 + Math.sin(time / 110) * 0.04).setAlpha(0.5 + Math.sin(time / 110) * 0.3);
 

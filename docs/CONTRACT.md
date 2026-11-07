@@ -1,5 +1,15 @@
 # Client Contract
 
+## Private friends and solo modes
+
+Public matching below is unchanged. Friends use `client.create("party", { playerId })`, then the synchronized `PartyState` supplies `code`, `hostId`, `phase` and `members` (handles/connected status, keyed by party session ID). `GET /api/party/:code` resolves a normalized six-character code to a party room ID; clients may `joinById` **that party room only**, never an arena.
+
+Only the party host may send `start`. The party server creates a protected arena and sends each member a `matched` seat reservation, consumed exactly as in the public queue. Keep the party socket open while playing. Arena disposal returns the persistent lobby to `lobby`; do not enter the public queue after a private round. Host ownership transfers when the host leaves/drops. Both party and arena support the ten-second reconnect hold. Client session storage scopes the party reconnect token by endpoint and code. Reload reconnects the party and its existing arena, without falling through into public matchmaking.
+
+Invite links carry only `?party=CODE`, never seat reservations or reconnect tokens. Closing the last party connection removes its code. Full rooms and expired codes have recoverable UI errors. Solo mode uses the existing shared simulation and bots independently of Colyseus.
+
+An arena must send complete initial roster/body fields and secondsLeft even while waiting for the other reserved friends. The strict client reads the first snapshot before countdown. `npm run smoke:friends` deliberately delays a second friend, checks that first snapshot, and repeats a round in the same lobby. It is included in CI against the production image.
+
 Everything the Phaser client needs. The source of truth is `shared/src/protocol.ts` and `shared/src/schema.ts`. `server/public/debug.html` is a complete working client in about 200 lines, so copy from it freely.
 
 ## Setup

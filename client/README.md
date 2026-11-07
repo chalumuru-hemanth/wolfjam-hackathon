@@ -2,22 +2,30 @@
 
 Phaser 4.1.0, Vite, and strict TypeScript. Touch joystick + action button, WASD + Space, HTML title/lobby/countdown/results, 60-second practice rounds, interpolation, shake, particles, hit feedback, score popups, and four local CC0 sounds.
 
-The online adapter follows [the server contract](../docs/CONTRACT.md). The client is an npm workspace in this repository; the production Docker build serves it from the same origin as Colyseus. A standalone checkout also supports local practice.
+The online adapter follows [the server contract](../docs/CONTRACT.md). The client is an npm workspace in this repository and uses the shared game rules. The production Docker build serves it from the same origin as Colyseus. A static practice build can be exported from this workspace.
 
 ## Open the game
 
-**Windows: double-click PLAY.cmd.** It opens an existing game server or starts Vite first. Keep its terminal window open while playing. The cross-platform equivalent is:
+**Windows: double-click PLAY.cmd.** In this repository it opens the running game, or builds the client and starts the complete backend/client at localhost:2567. Keep its terminal window open while playing. The cross-platform equivalent from the client folder is:
 
     npm run play
 
 For manual startup, use Node 24 (minimum 22.18):
 
-    npm ci
-    npm run dev
+    cd ..
+    npm install --ignore-scripts
+    npm run build
+    npm start
 
-Open the HTTP Local/Network URL printed by Vite. Opening index.html directly from Explorer cannot load the TypeScript app; it now shows launch help and a link to the working server instead of an unstyled game screen.
+Open http://localhost:2567/ for the complete game. For client development, use npm run dev:client at the repository root and configure VITE_COLYSEUS_URL to reach the backend. Opening index.html directly from Explorer shows launch help.
 
-In a standalone development checkout without a server URL, **Play practice → Ready · Start practice** runs the real game rules and bots on this device, so it also works without a network.
+**Solo practice → Ready · Start practice** runs the real game rules and three bots on this device, even when the online server is configured or unavailable. The production service worker caches the game shell, fonts, and sounds after the first complete load; it never caches matchmaking, credentials, or player state. You can then reload this address offline and choose Solo practice.
+
+**Play with friends** creates a persistent private lobby or joins a six-character code. Share its exact invite link/QR so everyone reaches the same lobby. The host starts rounds and remaining places fill with bots. Host ownership transfers on departure. Results return the group to its lobby for the next host-controlled round. No account or saved-friends service is required.
+
+When viewing localhost, a phone-reachable invite link requires a configured network URL; the code remains usable on the network/hosted game. A temporary HTTPS tunnel solves Wi-Fi isolation but must remain running for online play.
+
+The cached page checks `/healthz` before enabling multiplayer. If the server is unavailable, it shows Retry connection and keeps Solo practice available. It probes again when the page returns to the foreground and periodically while unavailable; an Internet connectivity icon alone does not establish that the game server is reachable. Saved online seats resume only after this check succeeds, with Exit available while connecting.
 
 ## Connect Sylesh's server
 
@@ -48,9 +56,11 @@ See [SERVER_CONTRACT.md](docs/SERVER_CONTRACT.md) for the exact mapping and depl
 3. For a QR while viewing localhost, set VITE_JOIN_URL in .env.local to the laptop's Network URL.
 4. Hold the left joystick while tapping the large right button; both orientations are supported.
 
-Online QR links enter the queue; the server assigns rooms. They do not reserve a particular arena. Obsolete room query parameters are removed. A reachable current LAN/hosted origin takes precedence over a development QR override; loopback/wildcard URLs are never encoded.
+The general phone QR opens the mode chooser. A friend-room QR includes its party code and opens that private lobby's join form. Public quick matching uses the server queue; private groups stay together in their lobby across rounds. Obsolete room query parameters are removed. A reachable current LAN/hosted origin takes precedence over a development QR override; loopback/wildcard URLs are never encoded.
 
 Join QR pauses input while keeping the current seat. Back to arena restores the current phase. Blur/backgrounding, cancellation, rotation, and viewport changes clear input and send an immediate stop.
+
+Exit in the game header leaves the current match or queue, clears held controls and the reconnect token, and returns to the title. Back to title on the results screen also leaves instead of automatically requeueing. Play/Find match starts a fresh session.
 
 Venue Wi-Fi may isolate devices. If the phone cannot reach the Network URL, check Wi-Fi/firewall access or use a hotspot.
 
@@ -69,7 +79,7 @@ Preview uses port 4173. A normal development server uses 5173. Both ports are fi
 
 To include this app in the backend build, place its working files under the server repo's client/ folder, add client to the root workspaces, and run the backend's existing Docker/build workflow. The app already has a build script and outputs to client/dist. Do not copy node_modules, .git, or development .env.local into the server deployment. No backend files were changed here.
 
-The standalone client has no SQLite dependency, so npm ci is appropriate here. Follow the server README's npm install instruction at the backend workspace root. The launcher resolves Vite from standalone or hoisted workspace dependencies.
+Source development requires the shared/server/client workspace. Use npm install --ignore-scripts at its root, or npm ci --ignore-scripts in CI as the Docker build does. The launcher resolves hoisted dependencies, builds the client, and starts the backend. An exported static practice build needs no running server.
 
 ## Checks
 

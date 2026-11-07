@@ -10,6 +10,8 @@ import { store } from "./db.ts";
 import { metrics } from "./metrics.ts";
 import { ArenaRoom } from "./rooms/ArenaRoom.ts";
 import { WaitRoom } from "./rooms/WaitRoom.ts";
+import { PartyRoom } from './rooms/PartyRoom.ts';
+import { findParty } from './parties.ts';
 
 export const PORT = Number(process.env.PORT ?? 2567);
 
@@ -48,13 +50,22 @@ export const server = defineServer({
   rooms: {
     [ROOMS.wait]: defineRoom(WaitRoom),
     [ROOMS.arena]: defineRoom(ArenaRoom),
+    party: defineRoom(PartyRoom),
   },
   express: (app) => {
     app.disable("x-powered-by");
     app.use(express.json({ limit: "10kb" }));
 
     app.get("/healthz", (_req, res) => {
+      res.set("Access-Control-Allow-Origin", "*");
       res.json({ ok: true, uptimeSeconds: Math.round(process.uptime()) });
+    });
+
+    app.get('/api/party/:code', (req, res) => {
+      res.set('Access-Control-Allow-Origin', '*');
+      const roomId = findParty(req.params.code);
+      if (!roomId) { res.status(404).json({ error: 'That room has closed or the code is incorrect. Ask your friend for a new invite.' }); return; }
+      res.json({ roomId });
     });
 
     app.get("/api/leaderboard", (_req, res) => {

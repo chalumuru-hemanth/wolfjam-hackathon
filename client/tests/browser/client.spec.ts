@@ -2,12 +2,6 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 const START = new Date('2026-11-06T22:00:00Z');
-/** Friction lets a player coast briefly once input stops, so wait for that first. */
-async function settledX(page: Page): Promise<number | undefined> {
-  await page.waitForTimeout(350);
-  return page.evaluate(() => window.__wolfjam?.().player?.x);
-}
-
 /** Steers toward the beacon like a player would, correcting after bots shove us. */
 async function walkIntoTheLight(page: Page): Promise<void> {
   const held = new Set<string>();
@@ -30,7 +24,7 @@ async function walkIntoTheLight(page: Page): Promise<void> {
 async function startPractice(page: Page): Promise<void> {
   await page.clock.setFixedTime(START);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Play practice', exact: true }).click();
+  await page.getByRole('button', { name: 'Solo practice', exact: true }).click();
   await expect(page.locator('#lobby-screen')).toBeVisible();
   await page.getByRole('button', { name: 'Ready · Start practice', exact: true }).click();
   await expect(page.locator('#countdown-screen')).toBeVisible();
@@ -48,13 +42,17 @@ test('full round, keyboard, scoring, audio unlock, results, and rematch', async 
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().audioLoaded)).toBe(4);
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().audioState)).toBe('running');
   await expect(page.locator('#visibility-label')).toHaveText('HIDDEN');
+  // Flash before entering the beacon, where bots can stun us. Read the short-lived UI together.
+  await page.keyboard.press('Space');
+  await expect.poll(() => page.evaluate(() => ({
+    flashes: window.__wolfjam?.().flashes,
+    visibility: document.querySelector('#visibility-label')?.textContent,
+    watchers: document.querySelector('#visibility-eyes')?.textContent,
+  }))).toEqual({ flashes: 1, visibility: 'EXPOSED', watchers: '3' });
   const before = await page.evaluate(() => window.__wolfjam?.().player?.x ?? 0);
   await walkIntoTheLight(page);
   expect(await page.evaluate(() => window.__wolfjam?.().player?.x)).not.toBe(before);
   expect(await page.evaluate(() => window.__wolfjam?.().player?.score ?? 0)).toBeGreaterThan(0);
-  await page.keyboard.press('Space');
-  await expect(page.locator('#visibility-label')).toHaveText('EXPOSED');
-  await expect(page.locator('#visibility-eyes')).toHaveText('3');
   await page.screenshot({ path: info.outputPath('play.png') });
   await page.getByRole('button', { name: 'Join QR ↗', exact: true }).click();
   await expect(page.locator('#title-screen')).toBeVisible();
@@ -85,16 +83,15 @@ test('simultaneous touch movement/action, cancellation, and rotation', async ({ 
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [stick, action] });
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().flashes ?? 0)).toBeGreaterThan(0);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-  const stopped = await settledX(page);
-  await page.waitForTimeout(150);
-  expect(await page.evaluate(() => window.__wolfjam?.().player?.x)).toBe(stopped);
+  // Knockback can move a player with no input. Check the frame actually sent to the simulation.
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveX)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveY)).toBe(0);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [stick] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [stick] });
-  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().player?.x ?? 0)).toBeGreaterThan((stopped ?? 0) + 5);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveX ?? 0)).toBeGreaterThan(0);
   await page.setViewportSize({ width: viewport.height, height: viewport.width });
-  const afterRotate = await settledX(page);
-  await page.waitForTimeout(150);
-  expect(await page.evaluate(() => window.__wolfjam?.().player?.x)).toBe(afterRotate);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveX)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveY)).toBe(0);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   await expect(page.locator('#game-header')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -107,12 +104,38 @@ test('focus loss clears held movement and requires a fresh key press', async ({ 
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().player?.x ?? 0)).toBeGreaterThan(spawnX + 10);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().inputEnabled)).toBe(false);
-  const stopped = await settledX(page);
-  await page.waitForTimeout(150);
-  expect(await page.evaluate(() => window.__wolfjam?.().player?.x)).toBe(stopped);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveX)).toBe(0);
   await page.keyboard.up('KeyD');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.keyboard.down('KeyD');
-  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().player?.x ?? 0)).toBeGreaterThan((stopped ?? 0) + 5);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().input.moveX ?? 0)).toBeGreaterThan(0);
   await page.keyboard.up('KeyD');
+});
+
+test('Exit clears held movement, ends practice, and allows a fresh session', async ({ page }) => {
+  const viewport = page.viewportSize()!;
+  if (viewport.width < 480) await page.setViewportSize({ width: 320, height: viewport.height });
+  await startPractice(page);
+  const spawnX = await page.evaluate(() => window.__wolfjam?.().player?.x ?? 0);
+  await page.keyboard.down('KeyD');
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().player?.x ?? 0)).toBeGreaterThan(spawnX + 10);
+  const exit = page.getByRole('button', { name: 'Exit game', exact: true });
+  const target = await exit.boundingBox();
+  expect(target?.width).toBeGreaterThanOrEqual(44);
+  expect(target?.height).toBeGreaterThanOrEqual(44);
+  expect((target?.x ?? 0) + (target?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await exit.click();
+  await expect(page.locator('#title-screen')).toBeVisible();
+  await expect(page.locator('#game-header')).toBeHidden();
+  expect(await page.evaluate(() => window.__wolfjam?.().playerCount)).toBe(0);
+  expect(await page.evaluate(() => window.__wolfjam?.().inputEnabled)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__wolfjam?.().audioState)).toBe('suspended');
+  const flashes = await page.evaluate(() => window.__wolfjam?.().flashes);
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => window.__wolfjam?.().flashes)).toBe(flashes);
+  await page.keyboard.up('KeyD');
+  await page.getByRole('button', { name: 'Solo practice', exact: true }).click();
+  await expect(page.locator('#lobby-screen')).toBeVisible();
+  expect(await page.evaluate(() => window.__wolfjam?.().player?.score)).toBe(0);
+  expect(await page.evaluate(() => window.__wolfjam?.().inputEnabled)).toBe(false);
 });

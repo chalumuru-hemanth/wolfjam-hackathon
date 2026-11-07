@@ -24,46 +24,58 @@
       <h1 id="file-launch-title">Open the arena.</h1>
       <p>This is the Vite source file. Start the local server to load the game and its styles.</p>
       <p>In the client folder, double-click <code>PLAY.cmd</code>, or run <code>npm run play</code>. Keep the server window open while playing.</p>
-      <a href="http://localhost:5173/">Open Nightlight ↗</a>
+      <a href="http://localhost:2567/">Open Nightlight ↗</a>
     </section>
     <div id="app">
       <div id="game" aria-label="Nightlight game canvas"></div>
       <header id="game-header" hidden>
         <span class="wordmark">N<span class="mark-dot">/</span>L <span class="header-title">NIGHTLIGHT</span></span>
         <div id="hud-stats"><span class="stat"><span class="stat-label">SCORE</span><strong id="hud-score" aria-live="polite">0</strong></span><span class="stat"><span class="stat-label">SECONDS</span><strong id="hud-timer" role="timer">60</strong></span><span class="stat leader-stat"><span class="stat-label">LEAD</span><strong id="hud-leader">–</strong></span></div>
-        <div class="header-right"><span class="local-label"><i></i><span id="connection-label">LOCAL</span></span><button id="join-button" class="text-button" type="button">Join QR ↗</button></div>
+        <div class="header-right"><span class="local-label"><i></i><span id="connection-label">LOCAL</span></span><button id="join-button" class="text-button" type="button">Join QR ↗</button><button id="exit-button" class="text-button exit-button" type="button" aria-label="Exit game" title="Leave game and return to title">Exit</button></div>
       </header>
       <section id="title-screen" aria-labelledby="game-title">
         <div class="title-shell">
           <div class="title-main">
-            <div class="eyebrow"><span class="live-dot"></span> WOLFJAM 2026 <span class="eyebrow-divider">/</span> 60 SECONDS</div>
-            <h1 id="game-title">Night<br /><span>light<span class="coral">.</span></span></h1>
-            <p class="intro">To score, you must be seen.<br />The light pays you. The dark hunts you.</p>
-            <button id="play-button" class="play-button" type="button"><span id="play-label">Play locally</span><span aria-hidden="true">↗</span></button>
+            <div class="home-brand"><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18Q32-12 62 18Q32 48 2 18Z" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="32" cy="18" r="9" fill="currentColor"/></svg><span>A game of visibility</span></div>
+            <h1 id="game-title" tabindex="-1">Nightlight</h1>
+            <p class="intro">Get rich in the light.<br />Rob them in the dark.</p>
+            <p class="home-pitch">Step into the spotlight to score. Flash nearby rivals to steal their points. Most points after 60 seconds wins.</p>
+            <div id="mode-buttons" class="mode-buttons">
+              <button id="play-button" class="play-button" type="button"><span id="play-label">Quick match</span><span aria-hidden="true">↗</span></button>
+              <button id="friends-button" class="friends-button" type="button"><svg viewBox="0 0 28 24" aria-hidden="true"><circle cx="10" cy="7" r="4"/><path d="M2 22v-4a8 8 0 0 1 16 0v4M23 6v10M18 11h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>Play with friends</button>
+              <button id="solo-button" class="solo-button" type="button" aria-label="Solo practice">Solo practice <span>Offline · with bots</span></button>
+            </div>
+            <section id="friend-form" class="friend-form" aria-label="Play with friends" hidden>
+              <button id="friends-back" type="button" class="text-button">Back</button>
+              <h2>Your friends. Your dark.</h2><p>Make a private room, or enter an invite code.</p>
+              <button id="host-button" class="play-button" type="button">Create friend room</button>
+              <div class="join-divider">Have a code?</div>
+              <form id="join-party-form"><label for="party-code-input">Invite code</label><div class="code-entry"><input id="party-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC234" /><button id="join-party-button" type="submit">Join room</button></div></form>
+              <p id="friend-error" role="status"></p>
+            </section>
             <p id="connection-status" class="connection-status" role="status" aria-live="polite"></p>
+            <button id="retry-connection" class="text-button" type="button" hidden>Retry connection</button>
             <p class="control-hint"><span class="keyboard-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move <span class="hint-separator">·</span> <kbd>Space</kbd> flash</span><span class="touch-hint">Left thumb: move <span class="hint-separator">·</span> Right thumb: flash</span></p>
           </div>
-          <aside class="join-card" aria-label="Join on your phone">
-            <div class="card-index">01 <span>TAKE IT TO YOUR PHONE</span></div>
-            <h2>Scan. Tap. Play.</h2>
-            <p class="join-description">Connect to the same Wi-Fi as this laptop.</p>
-            <div class="qr-frame"><canvas id="join-qr" aria-label="QR code to open this game on your phone" hidden></canvas><p id="qr-message">Preparing your join code…</p></div>
-            <a id="join-url" class="join-url" hidden></a>
-            <p id="join-note" class="join-note">One tap to enter. No download.</p>
+          <aside class="home-stage" aria-label="The light makes you a target">
+            <div class="spotlight-art" aria-hidden="true"><div class="beam"></div><div class="light-pool"></div><div class="demo-orb orb-holder"><i></i><span>+2 / sec</span></div><div class="demo-orb orb-hunter"><i></i><span>Steal +12</span></div><div class="demo-orb orb-hidden"><i></i></div><div class="stage-caption">The brighter you shine,<br />the more they want you.</div></div>
+            <details class="join-card"><summary>Take it to your phone <span>Show QR</span></summary><p class="join-description">Scan to open the game.</p><div class="qr-frame"><canvas id="join-qr" aria-label="QR code to open this game on your phone" hidden></canvas><p id="qr-message">Preparing your join code…</p></div><a id="join-url" class="join-url" hidden></a><p id="join-note" class="join-note">Open the same address on both devices.</p></details>
           </aside>
-          <footer class="title-footer"><span><i class="footer-square"></i> <span id="session-caption">MOVEMENT SANDBOX</span></span><span>BUILT FOR TWO THUMBS.</span></footer>
+          <footer class="title-footer"><span><span id="session-caption">2–6 players</span><span id="personal-best" hidden></span></span><span>One flash. Sixty seconds. No hiding at the end.</span></footer>
         </div>
       </section>
       <section id="lobby-screen" class="round-overlay" aria-labelledby="lobby-title" hidden>
         <div class="round-panel lobby-panel">
           <div class="panel-intro"><span id="lobby-mode" class="eyebrow">SOLO PRACTICE</span><h2 id="lobby-title">Lights<br /><span>going out.</span></h2><p data-objective>Stand in the light to score. Flash to steal. Both give you away.</p><p class="panel-note">Most points after 60 seconds wins.</p></div>
-          <div class="panel-actions"><div id="lobby-roster" class="roster" aria-label="Players in this room"></div><p id="lobby-note" class="panel-note"></p><button id="ready-button" class="play-button" type="button"><span id="ready-label">Ready up</span><span aria-hidden="true">→</span></button></div>
+          <div class="panel-actions"><div id="party-panel" class="party-panel" hidden><span class="panel-note">Invite your friends</span><div class="party-code-row"><strong id="party-code"></strong><button id="copy-code" class="text-button" type="button">Copy code</button></div><div class="party-invite"><canvas id="party-qr" aria-label="QR code to join this friend room"></canvas><div><a id="party-invite" target="_blank" rel="noopener"></a><button id="share-invite" class="text-button" type="button">Share invite</button><p id="share-status" role="status"></p></div></div></div><div id="lobby-roster" class="roster" aria-label="Players in this room"></div><p id="lobby-note" class="panel-note"></p><button id="ready-button" class="play-button" type="button"><span id="ready-label">Ready up</span><span aria-hidden="true">→</span></button></div>
         </div>
       </section>
       <section id="countdown-screen" aria-label="Round countdown" hidden><span class="eyebrow">GET READY</span><strong id="countdown-number" aria-live="assertive">3</strong><p data-objective>Stand in the light to score. Flash to steal. Both give you away.</p></section>
       <div id="visibility-chip" data-state="hidden" role="status" hidden><i></i><span id="visibility-label">HIDDEN</span><span id="visibility-eyes" class="eyes" hidden></span></div>
       <div id="play-objective" hidden><span data-objective>Stand in the light to score. Flash to steal. Both give you away.</span></div>
       <p id="network-banner" role="status" aria-live="polite"></p>
+      <p id="moment-toast" class="moment-toast" role="status" hidden></p>
+      <p id="light-income" hidden></p>
       <section id="results-screen" class="round-overlay" aria-labelledby="results-title" hidden>
         <div class="round-panel results-panel"><div class="result-summary"><span class="eyebrow">TIME'S UP</span><h2 id="results-title">Round complete.</h2><div class="score-total"><strong id="results-score">0</strong><span>YOUR POINTS</span></div><p id="results-caption" class="panel-note">One more round?</p></div><ol id="results-list" aria-label="Round standings"></ol><div class="result-actions"><button id="again-button" class="play-button" type="button"><span id="again-label">Play again</span><span aria-hidden="true">↗</span></button><button id="results-back" class="text-button" type="button">Back to title</button></div></div>
       </section>

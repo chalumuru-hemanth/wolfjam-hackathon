@@ -7,7 +7,7 @@ test('captures the key moments of a round', async ({ page }, info) => {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   await page.screenshot({ path: info.outputPath('title.png') });
-  await page.getByRole('button', { name: 'Play practice', exact: true }).click();
+  await page.getByRole('button', { name: 'Solo practice', exact: true }).click();
   await page.getByRole('button', { name: 'Ready · Start practice', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.__wolfjam?.().phase), { timeout: 6000 }).toBe('playing');
   await page.waitForTimeout(500);

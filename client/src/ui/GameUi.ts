@@ -2,6 +2,8 @@ import type { GameSession } from '../game/types';
 import { standings } from '../game/types';
 import { GAME } from '../game/config';
 import { AudioBus } from '../audio/AudioBus';
+import { BEACON } from '@wolfjam/shared/config';
+import type { ServerAvailability } from '../network/ServerAvailability';
 
 const OBJECTIVE_MS = 8000;
 
@@ -28,9 +30,25 @@ export class GameUi {
   private resultsKey = '';
   private playedWin = '';
   private lastWatchers = 0;
+  private wasLastLight = false;
+  private toastUntil = 0;
+  private stealAt = 0;
+  private stealAmount = 0;
+  private readonly stopEvents: () => void;
+  private personalBest = 0;
+  private bestRound = '';
 
-  constructor(session: GameSession, audio: AudioBus, configError: string) {
+  constructor(session: GameSession, audio: AudioBus, configError: string, private readonly availability: ServerAvailability) {
     this.session = session; this.audio = audio; this.configError = configError;
+    try { const stored = Number(localStorage.getItem('nightlight.best')); if (Number.isFinite(stored)) this.personalBest = Math.max(0, stored); } catch {}
+    this.stopEvents = session.onEvent((event) => {
+      if (event.type !== 'hit' || !event.lost) return;
+      if (event.sourceId === session.status.sessionId) {
+        if (performance.now() - this.stealAt > 150) this.stealAmount = 0;
+        this.stealAt = performance.now(); this.stealAmount += event.lost;
+        this.toast('Stole ' + this.stealAmount + ' points', 1200);
+      } else if (event.playerId === session.status.sessionId) this.toast('Lost ' + event.lost + ' · find the dark', 1100);
+    });
     document.querySelectorAll<HTMLElement>('[data-objective]').forEach((node) => { node.textContent = GAME.objective; });
     if (session.mode === 'online') {
       document.querySelector<HTMLElement>('.join-description')!.textContent = 'Scan to enter the match queue.';
@@ -47,6 +65,16 @@ export class GameUi {
     const phase = session.round.phase;
     const self = session.players.get(session.status.sessionId ?? '');
     const connected = session.connected;
+    const personalBest = document.getElementById('personal-best');
+    if (personalBest) { personalBest.hidden = this.personalBest === 0; personalBest.textContent = 'Personal best ' + this.personalBest; }
+    document.body.classList.toggle('friend-room', Boolean(session.party));
+    const inLight = phase === 'playing' && self !== undefined && session.beacon !== undefined &&
+      Math.hypot(self.x - session.beacon.x, self.y - session.beacon.y) <= GAME.beaconRadius;
+    element('light-income').hidden = !inLight || this.titleVisible;
+    this.text('light-income', '+' + BEACON.pointsPerSecond * (session.lastLight ? BEACON.lastLightMultiplier : 1) + ' / sec · everyone can see you');
+    if (phase === 'playing' && session.lastLight && !this.wasLastLight) this.toast('Last Light · everyone is visible', 1800);
+    this.wasLastLight = session.lastLight;
+    element('moment-toast').hidden = this.titleVisible || phase !== 'playing' || performance.now() >= this.toastUntil;
     this.title.hidden = !this.titleVisible;
     this.header.hidden = this.titleVisible;
     this.lobby.hidden = this.titleVisible || (session.status.phase !== 'connecting' && (!connected || phase !== 'lobby'));
@@ -56,17 +84,26 @@ export class GameUi {
     const opening = session.remainingMs > GAME.roundMs - OBJECTIVE_MS;
     element('play-objective').hidden = this.titleVisible || !connected || phase !== 'playing' || !opening;
     document.body.classList.toggle('playing', !this.titleVisible && phase === 'playing');
-    this.play.disabled = session.status.phase === 'connecting' || Boolean(this.configError);
+    const online = this.availability.available;
+    const checking = this.availability.checking;
+    this.play.disabled = session.status.phase === 'connecting' || Boolean(this.configError) || (!connected && !online);
     this.text('play-label', session.status.phase === 'connecting' ? 'Connecting…' : connected ? 'Back to arena' :
-      session.mode === 'practice' ? 'Play practice' : session.status.phase === 'error' || session.status.phase === 'disconnected' ? 'Try again' : 'Find match');
+      'Quick match');
     const error = this.configError || session.status.message;
-    this.text('connection-status', error || (session.mode === 'practice' ? 'Solo practice · 60 seconds · no download' : '2–6 players. One shared arena.'));
+    this.text('connection-status', !connected && !online && !this.configError ?
+      checking ? 'Checking multiplayer… Solo practice is ready.' : 'Multiplayer is unavailable. Retry or choose Solo practice.' :
+      error || '2–6 players. Friends welcome. No account needed.');
+    const retry = element<HTMLButtonElement>('retry-connection');
+    retry.hidden = !this.availability.configured || online || connected || Boolean(this.configError);
+    retry.disabled = checking;
+    retry.textContent = checking ? 'Checking…' : 'Retry connection';
     element('connection-status').dataset.error = String(Boolean(this.configError) || ['error', 'disconnected'].includes(session.status.phase));
     this.text('connection-label', session.mode === 'practice' ? 'PRACTICE' : session.status.phase === 'reconnecting' ? 'RETRY…' : connected ? `${session.status.count} / 6` : 'QUEUE');
     this.text('network-banner', session.status.phase === 'reconnecting' ? 'Reconnecting… Your seat is held for 10 seconds.' : '');
     this.text('session-caption', session.mode === 'practice' ? 'SOLO PRACTICE' : connected ? `ROOM ${session.status.roomId}` : '2–6 PLAYERS');
     this.text('lobby-mode', session.mode === 'practice' ? 'SOLO PRACTICE' : session.status.phase === 'connecting' ? 'MATCHMAKING' : `${session.status.count} / 6 PLAYERS`);
-    if (session.mode === 'online') this.text('lobby-title', session.status.phase === 'connecting' ? 'Finding players.' : 'Match found.');
+    if (session.mode === 'online') this.text('lobby-title', session.party ? 'Your crew. Your dark.' : session.status.phase === 'connecting' ? 'Finding players.' : 'Match found.');
+    else this.text('lobby-title', 'Find your edge.');
     this.text('lobby-note', session.mode === 'practice' ? 'A quick practice round on this device.' : session.status.phase === 'connecting' ?
       'A solo match fills with bots after 5 seconds. Six players start immediately.' : 'Your round starts automatically.');
     this.text('hud-score', String(self?.score ?? 0));
@@ -79,8 +116,18 @@ export class GameUi {
     this.text('ready-label', session.mode === 'practice' ? 'Ready · Start practice' : self?.ready ? 'Ready ✓ · Tap to undo' : 'Ready up');
     this.ready.disabled = !connected;
     this.ready.hidden = session.mode === 'online';
+    if (session.party) {
+      const host = session.party.hostId === session.party.selfId;
+      const available = session.party.phase === 'lobby';
+      this.text('lobby-mode', 'Friend room · ' + session.party.members.length + ' / 6');
+      this.text('lobby-note', available ? host ? 'Share the code, then start when your friends are here. Empty places fill with bots.' :
+        'Waiting for the host to start. You will play every round together.' : 'A round is in progress. Your place is saved for the next one.');
+      this.ready.hidden = false; this.ready.disabled = !host || !available;
+      this.text('ready-label', host ? available ? session.party.members.length === 1 ? 'Start with bots' : 'Start round' : 'Round in progress' : 'Waiting for host');
+    }
     this.again.disabled = session.mode === 'online';
     this.text('again-label', session.mode === 'online' ? seconds > 0 ? `Next match in ${seconds}s` : 'Finding next match…' : 'Play again');
+    if (session.party) this.text('again-label', `Back to friends in ${seconds}s`);
     this.renderRoster();
     if (phase === 'results') this.renderResults();
   }
@@ -112,6 +159,8 @@ export class GameUi {
   }
 
   private text(id: string, value: string): void { const node = element(id); if (node.textContent !== value) node.textContent = value; }
+  private toast(message: string, duration: number): void { this.text('moment-toast', message); this.toastUntil = performance.now() + duration; }
+  destroy(): void { this.stopEvents(); }
 
   private renderRoster(): void {
     const entries = [...this.session.players];
@@ -123,10 +172,11 @@ export class GameUi {
     for (const [id, player] of entries) {
       const self = id === this.session.status.sessionId;
       const card = document.createElement('div'); card.className = 'player-card';
-      const avatar = document.createElement('span'); avatar.className = `player-avatar${self ? ' self' : ''}`; avatar.textContent = '›';
+      const avatar = document.createElement('span'); avatar.className = `player-avatar${self ? ' self' : ''}`; avatar.setAttribute('aria-hidden', 'true');
       const name = document.createElement('span'); name.className = 'player-name'; name.textContent = self ? player.handle ? `YOU · ${player.handle}` : 'YOU' : player.handle || `PLAYER ${id.slice(0, 4).toUpperCase()}`;
       const ready = document.createElement('span'); ready.className = `ready-badge${player.ready ? ' is-ready' : ''}`;
-      ready.textContent = this.session.mode === 'practice' ? player.ready ? 'READY ✓' : '…' : player.connected === false ? 'AWAY' : player.kind === 'human' ? 'IN' : player.kind?.toUpperCase() || 'IN';
+      ready.textContent = this.session.party ? player.connected === false ? 'AWAY' : id === this.session.party.hostId ? 'HOST' : 'IN' :
+        this.session.mode === 'practice' ? player.ready ? 'READY ✓' : '…' : player.connected === false ? 'AWAY' : player.kind === 'human' ? 'IN' : player.kind?.toUpperCase() || 'IN';
       card.append(avatar, name, ready); roster.append(card);
     }
   }
@@ -140,10 +190,15 @@ export class GameUi {
     const top = rows[0]?.score ?? 0;
     const winners = this.session.mode === 'online' ? result?.winners ?? [] : top > 0 ? rows.filter((row) => row.score === top).map((row) => row.id) : [];
     const own = rows.find((row) => row.id === this.session.status.sessionId);
+    if (own && own.score > this.personalBest) {
+      this.personalBest = own.score; this.bestRound = this.session.round.roundId;
+      try { localStorage.setItem('nightlight.best', String(this.personalBest)); } catch {}
+    }
     const win = own !== undefined && winners.includes(own.id);
     this.text('results-title', win ? winners.length > 1 ? 'Shared win.' : 'Nicely done.' : 'Round complete.');
     this.text('results-score', String(own?.score ?? 0));
     this.text('results-caption', this.session.mode === 'online' && !result ? 'Final scores incoming…' : win ? 'Seen at exactly the right moments.' : 'The dark is waiting. One more round?');
+    if (this.bestRound === this.session.round.roundId) this.text('results-caption', 'New personal best. Can you steal the next round too?');
     const board = element('results-list'); board.replaceChildren();
     rows.forEach((row) => {
       const item = document.createElement('li'); item.className = row.id === own?.id ? 'result-row self' : 'result-row';

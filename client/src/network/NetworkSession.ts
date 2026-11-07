@@ -42,6 +42,7 @@ export class NetworkSession implements GameSession {
   private readonly config: NetworkConfig;
   private readonly timeoutMs: number;
   private readonly every: Every;
+  private readonly autoQueue: boolean;
   private generation = 0;
   private readonly listeners = new Set<(status: ConnectionStatus) => void>();
   private readonly events = new Set<(event: GameEvent) => void>();
@@ -56,8 +57,8 @@ export class NetworkSession implements GameSession {
   private cooldownEnd = 0;
   private currentStatus: ConnectionStatus = { phase: 'idle', message: '', count: 0 };
 
-  constructor(connectRoom: ConnectRoom, config: NetworkConfig, timeoutMs = 30000, every: Every = defaultEvery) {
-    this.connectRoom = connectRoom; this.config = config; this.timeoutMs = timeoutMs; this.every = every;
+  constructor(connectRoom: ConnectRoom, config: NetworkConfig, timeoutMs = 30000, every: Every = defaultEvery, autoQueue = true) {
+    this.connectRoom = connectRoom; this.config = config; this.timeoutMs = timeoutMs; this.every = every; this.autoQueue = autoQueue;
   }
   get status(): ConnectionStatus { return this.currentStatus; }
   get connected(): boolean { return this.status.phase === 'connected' || this.status.phase === 'reconnecting'; }
@@ -140,7 +141,7 @@ export class NetworkSession implements GameSession {
           const next = this.round.phase === 'results';
           ++this.generation; this.releaseRoom();
           this.publish({ phase: next ? 'idle' : 'disconnected', message: next ? '' : 'Connection ended. Find a new match.', count: 0 });
-          if (next) void this.join();
+          if (next && this.autoQueue) void this.join();
         }),
         room.onDrop(dropped),
         room.onReconnect(() => {

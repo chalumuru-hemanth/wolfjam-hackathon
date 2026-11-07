@@ -6,6 +6,14 @@ The arena is dark. Your status always shows how many players can see you. A movi
 
 Move with WASD or the left stick. Flash with Space or the right button.
 
+## Choose how to play
+
+- **Quick match:** public matchmaking, 60-second rounds, and bots filling empty places.
+- **Play with friends:** create a private six-character room code, share its link/QR, or enter a friend's code. The host starts the round. Host ownership transfers when the host leaves, and everyone returns to the same lobby between rounds.
+- **Solo practice:** the shared rules and three bots run on your device. After one complete online load, the production app is cached for offline reloads too.
+
+The hook is **Get rich in the light. Rob them in the dark.** The spotlight advertises your income and exposure, flashes produce theft feedback, and Last Light reveals everyone for the finish. Personal bests stay on the device. Exit leaves your session and stops automatic rejoining.
+
 ## Run it
 
 ```bash

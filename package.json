@@ -11,8 +11,9 @@
     "build": "npm run build -w client",
     "start": "npm run start -w server",
     "typecheck": "tsc --noEmit -p shared && tsc --noEmit -p server && npm run typecheck -w client",
-    "test": "node --import tsx --test shared/src/sim.test.ts server/src/server.test.ts && npm test -w client",
+    "test": "node --import tsx --test shared/src/sim.test.ts server/src/server.test.ts server/src/parties.test.ts && npm test -w client",
     "smoke": "tsx scripts/smoke.ts http://localhost:2567",
+    "smoke:friends": "tsx scripts/friends-smoke.ts",
     "abuse": "tsx scripts/abuse.ts http://localhost:2567"
   },
   "devDependencies": {

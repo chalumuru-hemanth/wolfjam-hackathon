@@ -24,6 +24,7 @@ jobs:
           docker run -d --name wolfjam -p 2567:2567 -e PORT=2567 -e OPS_TOKEN=ci wolfjam
           timeout 30 sh -c 'until curl -sf localhost:2567/healthz; do sleep 1; done'
       - run: npm run smoke
+      - run: npm run smoke:friends
       - run: npm run abuse
       - name: Server log
         if: always()

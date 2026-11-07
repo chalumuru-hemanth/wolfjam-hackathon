@@ -12,6 +12,10 @@ export interface BeaconSnapshot extends Point { nextX: number; nextY: number; mo
 export type RoundPhase = 'lobby' | 'countdown' | 'playing' | 'results';
 export interface RoundSnapshot { phase: RoundPhase; roundId: string }
 export interface RoundResult { winners: string[]; standings: Array<{ id: string; handle: string; kind: string; score: number }> }
+export interface PartySnapshot {
+  code: string; hostId: string; selfId: string; phase: string;
+  members: Array<{ id: string; handle: string; connected: boolean }>;
+}
 export type GameEvent =
   | ({ type: 'action'; playerId: string } & Point)
   | ({ type: 'hit'; playerId: string; sourceId?: string; lost?: number } & Point)
@@ -31,6 +35,7 @@ export interface GameSession {
   readonly remainingMs: number;
   readonly cooldownMs: number;
   readonly roundResult?: RoundResult;
+  readonly party?: PartySnapshot;
   join(): Promise<void>;
   update(frame: InputFrame, deltaMs: number): void;
   ready(value: boolean): void;

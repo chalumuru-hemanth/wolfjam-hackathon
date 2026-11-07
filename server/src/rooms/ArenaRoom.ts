@@ -44,12 +44,14 @@ import {
 } from "@wolfjam/shared";
 import { generateHandle, store } from "../db.ts";
 import { ROOM_KEY } from "../matchmaking.ts";
+import { finishPartyRound } from '../parties.ts';
 import { metrics, type RoomSnapshot } from "../metrics.ts";
 
 interface ArenaCreateOptions {
   /** How many reserved players the matchmaker is sending. */
   expected: number;
   roomKey: string;
+  partyCode?: string;
 }
 
 interface Slot {
@@ -101,13 +103,16 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
   private expected = 0;
   private phaseTicksLeft = secondsToTicks(ROUND.joinTimeoutSeconds);
   private tickCount = 0;
+  private partyCode = '';
 
   override async onCreate(options: ArenaCreateOptions): Promise<void> {
     if (options.roomKey !== ROOM_KEY) {
       throw new ServerError(FORBIDDEN, "arenas are created by the matchmaker");
     }
     this.expected = options.expected;
+    this.partyCode = options.partyCode ?? '';
     this.state.phase = "waiting";
+    this.state.secondsLeft = ROUND.joinTimeoutSeconds;
     this.syncBeacon();
     // Seats only come from the matchmaker, so this room is never listed.
     await this.setPrivate(true);
@@ -117,6 +122,7 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
 
   override onDispose(): void {
     metrics.unregisterRoom(this.roomId);
+    if (this.partyCode) finishPartyRound(this.partyCode, this.roomId);
   }
 
   /** Rejects any join that did not come from a matchmaker seat. */
@@ -191,13 +197,17 @@ export class ArenaRoom extends Room<{ state: ArenaState; input: InputFrame }> {
     kind: PlayerKind,
     style?: BotStyle,
   ): void {
-    const sim = createPlayer(id, 0, 0);
+    const initial = spawnPoint(this.world.players.length, MATCH.maxPlayers);
+    const sim = createPlayer(id, initial.x, initial.y);
     const player = new PlayerState();
     player.handle = handle;
     player.kind = kind;
+    player.score = 0;
     player.connected = true;
     const body = new BodyState();
+    body.x = Math.round(sim.x); body.y = Math.round(sim.y);
     body.actionReady = true;
+    body.stunned = false; body.exposed = false; body.shielded = false;
     this.slots.set(id, { sim, player, body, input: { ...IDLE_INPUT }, style });
     this.world.players.push(sim);
     this.state.players.set(id, player);

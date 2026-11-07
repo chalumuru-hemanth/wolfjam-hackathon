@@ -1,6 +1,13 @@
 export interface NetworkConfig { endpoint?: string; roomName: string }
 export interface NetworkEnv { VITE_COLYSEUS_URL?: string; VITE_PRACTICE?: string }
 
+export function serverHttpUrl(endpoint: string, path: string): URL {
+  const url = new URL(endpoint);
+  if (url.protocol === 'ws:') url.protocol = 'http:';
+  if (url.protocol === 'wss:') url.protocol = 'https:';
+  return new URL(path, url);
+}
+
 export function readNetworkConfig(env: NetworkEnv, pageUrl: string, production = false): NetworkConfig {
   const page = new URL(pageUrl);
   const endpoint = env.VITE_COLYSEUS_URL?.trim() || (production && env.VITE_PRACTICE !== 'true' ? page.origin : undefined);

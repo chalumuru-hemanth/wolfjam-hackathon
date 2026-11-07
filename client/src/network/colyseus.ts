@@ -8,7 +8,7 @@ import type { BrowserStore } from './identity.ts';
 
 type LiveRoom = Room<unknown, unknown>;
 type Reservation = Parameters<Client['consumeSeatReservation']>[0];
-interface Dependencies { playerId?: () => string; sessionStore?: BrowserStore }
+interface Dependencies { playerId?: () => string; sessionStore?: BrowserStore; reservation?: Reservation; reconnectOnly?: boolean }
 
 export function createColyseusConnector(dependencies: Dependencies = {}): ConnectRoom {
   return async (config: NetworkConfig, options?: ConnectOptions): Promise<RoomConnection> => {
@@ -16,15 +16,16 @@ export function createColyseusConnector(dependencies: Dependencies = {}): Connec
     const endpoint = config.endpoint;
     const storage = dependencies.sessionStore ?? browserStore('sessionStorage');
     const client = new Client(endpoint);
-    const token = storedToken(endpoint, storage);
-    let room: LiveRoom | undefined;
+    const token = dependencies.reservation ? undefined : storedToken(endpoint, storage);
+    let room: LiveRoom | undefined = dependencies.reservation ? await client.consumeSeatReservation<unknown>(dependencies.reservation) : undefined;
     if (token) {
       options?.progress('Rejoining your arena…');
       try { room = await client.reconnect<unknown>(token); }
-      catch { saveToken(endpoint, undefined, storage); }
+      catch (error) { saveToken(endpoint, undefined, storage); if (dependencies.reconnectOnly) throw error; }
     }
     if (options?.signal.aborted) { if (room) void room.leave(); throw new Error('Matchmaking cancelled.'); }
     if (!room) {
+      if (dependencies.reconnectOnly) throw new Error('Your previous round ended. Wait here for the next friend round.');
       options?.progress('Finding players… Solo matches fill after 5 seconds.');
       const playerId = dependencies.playerId?.() ?? getStoredPlayerId();
       const wait = await client.joinOrCreate<unknown>('wait', { playerId });
